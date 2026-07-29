@@ -1,4 +1,5 @@
 # Sync Retail POS - Production Handover Plan
+### *A Product of [SS Labz](https://ss-labz.pages.dev/)*
 
 This document outlines the deployment architecture, configuration guidelines, security rules, and backup policies required to promote the **Sync Retail POS** system from a local development environment to production hosting.
 

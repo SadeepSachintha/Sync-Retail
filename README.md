@@ -1,4 +1,5 @@
 # Sync Retail POS System
+### *A Product of [SS Labz](https://ss-labz.pages.dev/)*
 
 An **"Air-Gap Friendly"** Point of Sale (POS) register architecture designed for retail shops, eco-lodges, or remote island resorts that suffer from unreliable or intermittent internet connectivity. 
 
