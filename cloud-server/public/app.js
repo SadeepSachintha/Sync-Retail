@@ -29,10 +29,7 @@ function initIcons() {
 
 // Format Currency
 function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
+  return `Rs. ${parseFloat(amount).toFixed(2)}`;
 }
 
 // Fetch KPI statistics and product sales

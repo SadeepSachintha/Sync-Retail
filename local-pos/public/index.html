@@ -14,14 +14,20 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <div class="app-container">
+  <div class="app-container" id="app-viewport">
     
-    <!-- Left Sidebar: Sync & Configuration Panel -->
+    <!-- Left Sidebar: Navigation, Sync & Configuration Panel -->
     <aside class="sidebar">
       <div class="brand">
         <div class="logo-icon">SR</div>
         <h1>Sync Retail</h1>
         <span class="badge">POS REG</span>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="sidebar-nav">
+        <button class="nav-btn active" id="nav-pos-btn"><i data-lucide="shopping-cart"></i> POS Terminal</button>
+        <button class="nav-btn" id="nav-shift-btn"><i data-lucide="calculator"></i> Register Shift</button>
       </div>
 
       <div class="card status-card">
@@ -66,12 +72,17 @@
       </div>
     </aside>
 
-    <!-- Main Section: Products Grid -->
-    <main class="main-content">
+    <!-- Main Section: POS Terminal Grid -->
+    <main class="main-content" id="pos-terminal-view">
       <header class="main-header">
         <div class="search-bar-container">
           <i data-lucide="search" class="search-icon"></i>
-          <input type="text" id="search-input" placeholder="Search products by name or SKU...">
+          <input type="text" id="search-input" placeholder="Search products by name or SKU..." autocomplete="off">
+          
+          <!-- SKU Autocomplete Suggestion Dropdown -->
+          <div class="search-suggestions" id="search-suggestions">
+            <!-- Autocomplete suggestions dynamically injected -->
+          </div>
         </div>
         <div class="categories">
           <button class="category-btn active" data-category="all">All Items</button>
@@ -89,8 +100,58 @@
       </section>
     </main>
 
+    <!-- Shift Panel View (Hidden by default) -->
+    <main class="main-content" id="shift-panel-view" style="display: none; padding: 24px; overflow-y: auto;">
+      <div class="shift-dashboard-header">
+        <h1 style="font-family: var(--font-family-title); font-size: 24px; margin-bottom: 20px;">Active Register Shift</h1>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div class="card">
+          <h3 style="margin-bottom: 15px;">Drawer Inflow (Sales Summaries)</h3>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">
+              <span class="text-muted">Opening Cash Float:</span>
+              <span id="shift-opening-float" style="font-weight: 600;">Rs. 0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">
+              <span class="text-muted">Cash Sales:</span>
+              <span id="shift-cash-sales" style="font-weight: 600; color: var(--color-success);">Rs. 0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">
+              <span class="text-muted">Card Sales:</span>
+              <span id="shift-card-sales" style="font-weight: 600;">Rs. 0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">
+              <span class="text-muted">Mobile QR Sales:</span>
+              <span id="shift-mobile-sales" style="font-weight: 600;">Rs. 0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-top: 10px;">
+              <strong style="font-size: 1.1rem;">Total Active Sales:</strong>
+              <strong id="shift-total-sales" style="font-size: 1.1rem; color: var(--color-primary);">Rs. 0.00</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <h3 style="margin-bottom: 15px;">Shift Management</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+              Closing the shift generates an audit report verifying physical drawer cash against sales metrics.
+            </p>
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+              Opened At: <span id="shift-opened-time" style="color: var(--text-main); font-weight: 500;">-</span>
+            </div>
+          </div>
+          <button id="close-shift-trigger-btn" class="btn btn-primary btn-block btn-lg" style="background-color: var(--color-danger);">
+            Close Shift & Count Cash
+          </button>
+        </div>
+      </div>
+    </main>
+
     <!-- Right Sidebar: Cart & Checkout -->
-    <section class="cart-sidebar">
+    <section class="cart-sidebar" id="pos-cart-panel">
       <div class="cart-header">
         <h2>Current Order</h2>
         <button id="clear-cart-btn" class="btn-clear"><i data-lucide="trash-2"></i> Clear</button>
@@ -104,19 +165,36 @@
         </div>
       </div>
 
+      <!-- Cart Discount, Summary & Payments -->
       <div class="cart-summary">
+        <!-- Cart Level Discount Engine -->
+        <div style="margin-bottom: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); padding-bottom: 15px;">
+          <h4 style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Order Discount</h4>
+          <div style="display: flex; gap: 8px;">
+            <div class="discount-tabs" style="display: flex; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 2px;">
+              <button class="discount-tab-btn active" id="disc-percent-btn">%</button>
+              <button class="discount-tab-btn" id="disc-val-btn">Rs.</button>
+            </div>
+            <input type="number" id="discount-input" placeholder="0" min="0" style="flex: 1; padding: 6px 10px; font-size: 13px; text-align: right; background: rgba(0,0,0,0.2);">
+          </div>
+        </div>
+
         <div class="summary-line">
           <span>Subtotal</span>
-          <span id="subtotal-display">$0.00</span>
+          <span id="subtotal-display">Rs. 0.00</span>
+        </div>
+        <div class="summary-line" id="discount-summary-row" style="display: none; color: var(--color-warning);">
+          <span>Discount Applied</span>
+          <span id="discount-display">-Rs. 0.00</span>
         </div>
         <div class="summary-line">
           <span>VAT (10%)</span>
-          <span id="tax-display">$0.00</span>
+          <span id="tax-display">Rs. 0.00</span>
         </div>
         <hr class="summary-divider">
         <div class="summary-line total-line">
           <span>Total</span>
-          <span id="total-display">$0.00</span>
+          <span id="total-display">Rs. 0.00</span>
         </div>
 
         <div class="payment-methods">
@@ -147,6 +225,82 @@
     </section>
   </div>
 
+  <!-- ==========================================================
+       MODAL OVERLAYS
+       ========================================================== -->
+
+  <!-- Shift Gate Modal: Blocks POS operations until float is input -->
+  <div class="modal-overlay active" id="shift-gate-modal" style="z-index: 1500; backdrop-filter: blur(16px); background: rgba(8, 9, 14, 0.9);">
+    <div class="modal-card" style="max-width: 380px; text-align: center;">
+      <div style="background: rgba(99,102,241,0.1); color: var(--color-primary); width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+        <i data-lucide="key-round" style="width: 32px; height: 32px; stroke-width: 2;"></i>
+      </div>
+      <h2 style="font-family: var(--font-family-title); font-size: 22px; margin-bottom: 10px;">Register Shift Locked</h2>
+      <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px;">
+        Please input the starting cash float inside the cash drawer to open this POS register shift.
+      </p>
+      <form id="open-shift-form">
+        <div class="form-group" style="text-align: left;">
+          <label for="opening-float-input">Opening Cash Float (LKR)</label>
+          <input type="number" id="opening-float-input" required placeholder="Rs. 5,000" min="0" style="text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 0.5px; padding: 12px;">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block btn-lg" style="margin-top: 14px;">Open Register Shift</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Close Shift Reconciliation Modal -->
+  <div class="modal-overlay" id="close-shift-modal">
+    <div class="modal-card" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>Close Shift Reconciliation</h2>
+        <button id="close-shift-cancel-btn" class="btn-close">&times;</button>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.4;">
+        Count the cash drawer physical bank notes, type the sum below, and click save to reconcile registers.
+      </p>
+      <form id="close-shift-form">
+        <div class="form-group">
+          <label for="actual-cash-input">Counted Physical Cash (LKR)</label>
+          <input type="number" id="actual-cash-input" required placeholder="Rs. 0.00" min="0" style="text-align: center; font-size: 20px; font-weight: bold; padding: 12px;">
+        </div>
+        <div class="modal-actions" style="margin-top: 24px;">
+          <button type="button" id="close-shift-abort-btn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="background-color: var(--color-danger);">Close & Reconcile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Barcode Sticker Modal -->
+  <div class="modal-overlay" id="barcode-modal">
+    <div class="modal-card" style="max-width: 400px; text-align: center;">
+      <div class="modal-header" style="justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 12px; margin-bottom: 16px;">
+        <h2>Print Product Barcode</h2>
+        <button id="barcode-close-btn" class="btn-close">&times;</button>
+      </div>
+      <h3 id="barcode-modal-product-name" style="font-size: 16px; font-family: var(--font-family-title); margin-bottom: 4px;">Product Name</h3>
+      <span id="barcode-modal-product-sku" style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 16px;">SKU CODE</span>
+      
+      <!-- Barcode Graphic Box -->
+      <div style="background: white; padding: 20px; border-radius: 8px; display: inline-block; width: 100%; max-width: 320px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" id="barcode-graphic-box">
+        <!-- SVG injected here -->
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <label style="display: block; margin-bottom: 8px; font-size: 11px;">Print Layout Configuration</label>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <button class="btn btn-secondary active" id="print-single-btn" style="padding: 10px; font-size: 12px;">Single Sticker</button>
+          <button class="btn btn-secondary" id="print-sheet-btn" style="padding: 10px; font-size: 12px;">Sheet of 30 (A4)</button>
+        </div>
+      </div>
+
+      <button id="barcode-trigger-print-btn" class="btn btn-primary btn-block btn-lg">
+        <i data-lucide="printer"></i> Print Sticker
+      </button>
+    </div>
+  </div>
+
   <!-- Receipt / Checkout Modal -->
   <div class="modal-overlay" id="receipt-modal">
     <div class="receipt-card">
@@ -174,16 +328,35 @@
         <div class="receipt-items" id="receipt-items-list">
           <!-- Items injected here -->
         </div>
-        <hr class="receipt-divider">
+        <hr class="receipt-divider" style="margin-top:10px;">
+        <div class="receipt-info-row" id="receipt-discount-row" style="display:none; color: var(--color-warning); font-size:13px; font-weight:600;">
+          <span>Discount Applied:</span>
+          <span id="receipt-discount-val">-Rs. 0.00</span>
+        </div>
+        <hr class="receipt-divider" id="receipt-discount-divider" style="display:none; margin-top:6px;">
         <div class="receipt-total-row">
           <span>Total Paid:</span>
-          <span id="receipt-total" class="bold total-amount">$0.00</span>
+          <span id="receipt-total" class="bold total-amount">Rs. 0.00</span>
         </div>
       </div>
       <div class="receipt-footer">
         <button id="close-receipt-btn" class="btn btn-primary btn-block">New Order</button>
       </div>
     </div>
+  </div>
+
+  <!-- ==========================================================
+       HIDDEN PRINT-ONLY OVERLAY LAYOUTS
+       ========================================================== -->
+
+  <!-- Printable Barcode grids (rendered only when printer is active) -->
+  <div id="print-barcode-wrapper" style="display: none;">
+    <!-- Cells will be dynamically generated by Javascript -->
+  </div>
+
+  <!-- Printable Register Shift Reconciliation Audit Report -->
+  <div id="print-shift-audit-wrapper" style="display: none;">
+    <!-- Audit summaries generated here -->
   </div>
 
   <!-- Javascript -->

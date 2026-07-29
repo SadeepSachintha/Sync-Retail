@@ -24,6 +24,129 @@ function addSyncLog(message, type = 'info') {
 
 // POS Endpoints
 
+// Get active register shift
+app.get('/api/shifts/active', async (req, res) => {
+  try {
+    const db = await getDb();
+    const activeShift = await db.get("SELECT * FROM register_shifts WHERE status = 'open' LIMIT 1");
+    if (activeShift) {
+      res.json({ status: 'success', data: activeShift });
+    } else {
+      res.status(404).json({ status: 'error', message: 'No active shift found' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get expected running totals for active register shift
+app.get('/api/shifts/active/totals', async (req, res) => {
+  try {
+    const db = await getDb();
+    const activeShift = await db.get("SELECT id FROM register_shifts WHERE status = 'open' LIMIT 1");
+    if (!activeShift) {
+      return res.status(404).json({ status: 'error', message: 'No active shift found' });
+    }
+
+    const cashRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Cash'", [activeShift.id]);
+    const cardRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Card'", [activeShift.id]);
+    const mobileRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Mobile'", [activeShift.id]);
+
+    const cash = cashRow.total;
+    const card = cardRow.total;
+    const mobile = mobileRow.total;
+
+    res.json({
+      status: 'success',
+      cash_sales: cash,
+      card_sales: card,
+      mobile_sales: mobile,
+      total_sales: cash + card + mobile
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Open a new register shift
+app.post('/api/shifts/open', async (req, res) => {
+  const { opening_float } = req.body;
+  try {
+    const db = await getDb();
+    const activeShift = await db.get("SELECT id FROM register_shifts WHERE status = 'open' LIMIT 1");
+    if (activeShift) {
+      return res.status(400).json({ status: 'error', message: 'A register shift is already open' });
+    }
+
+    const openedAt = new Date().toISOString();
+    const result = await db.run(
+      'INSERT INTO register_shifts (register_id, opening_float, opened_at, status) VALUES (?, ?, ?, ?)',
+      [REGISTER_ID, opening_float, openedAt, 'open']
+    );
+
+    addSyncLog(`Register Shift Opened with float: Rs. ${opening_float}`, 'success');
+    res.json({
+      status: 'success',
+      data: { id: result.lastID, register_id: REGISTER_ID, opening_float, opened_at: openedAt, status: 'open' }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Close active register shift and return reconciliation totals
+app.post('/api/shifts/close', async (req, res) => {
+  const { actual_cash } = req.body;
+  try {
+    const db = await getDb();
+    const activeShift = await db.get("SELECT * FROM register_shifts WHERE status = 'open' LIMIT 1");
+    if (!activeShift) {
+      return res.status(404).json({ status: 'error', message: 'No active register shift to close' });
+    }
+
+    // Expected totals calculation
+    const cashSalesRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Cash'", [activeShift.id]);
+    const cardSalesRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Card'", [activeShift.id]);
+    const mobileSalesRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Mobile'", [activeShift.id]);
+
+    const cashSales = cashSalesRow.total;
+    const cardSales = cardSalesRow.total;
+    const mobileSales = mobileSalesRow.total;
+
+    const expectedClosingCash = activeShift.opening_float + cashSales;
+    const discrepancy = actual_cash - expectedClosingCash;
+    const closedAt = new Date().toISOString();
+
+    await db.run(
+      `UPDATE register_shifts 
+       SET closing_cash = ?, actual_cash = ?, discrepancy = ?, closed_at = ?, status = 'closed' 
+       WHERE id = ?`,
+      [expectedClosingCash, actual_cash, discrepancy, closedAt, activeShift.id]
+    );
+
+    addSyncLog(`Register Shift Closed. Discrepancy: Rs. ${discrepancy.toFixed(2)}`, discrepancy === 0 ? 'success' : 'warning');
+
+    res.json({
+      status: 'success',
+      data: {
+        id: activeShift.id,
+        opening_float: activeShift.opening_float,
+        cash_sales: cashSales,
+        card_sales: cardSales,
+        mobile_sales: mobileSales,
+        total_sales: cashSales + cardSales + mobileSales,
+        expected_cash: expectedClosingCash,
+        actual_cash: actual_cash,
+        discrepancy: discrepancy,
+        opened_at: activeShift.opened_at,
+        closed_at: closedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get local catalog
 app.get('/api/products', async (req, res) => {
   try {
@@ -44,16 +167,23 @@ app.post('/api/sales', async (req, res) => {
 
   try {
     const db = await getDb();
+    
+    // Shift Gate check
+    const activeShift = await db.get("SELECT id FROM register_shifts WHERE status = 'open' LIMIT 1");
+    if (!activeShift) {
+      return res.status(400).json({ error: "Register shift is locked. You must open a shift with an initial cash float to checkout." });
+    }
+
     const saleId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
 
     // SQLite Transaction
     await db.run('BEGIN TRANSACTION;');
 
-    // Insert sale metadata
+    // Insert sale metadata with shift_id link
     await db.run(
-      'INSERT INTO sales (id, register_id, total_amount, payment_method, created_at, synced) VALUES (?, ?, ?, ?, ?, 0)',
-      [saleId, REGISTER_ID, totalAmount, paymentMethod, createdAt]
+      'INSERT INTO sales (id, register_id, total_amount, payment_method, created_at, synced, shift_id) VALUES (?, ?, ?, ?, ?, 0, ?)',
+      [saleId, REGISTER_ID, totalAmount, paymentMethod, createdAt, activeShift.id]
     );
 
     // Insert sale items and decrement stock
@@ -72,7 +202,7 @@ app.post('/api/sales', async (req, res) => {
 
     await db.run('COMMIT;');
 
-    addSyncLog(`Sale created locally: ${saleId.slice(0,8)}... Total: $${totalAmount}`, 'info');
+    addSyncLog(`Sale created locally: ${saleId.slice(0,8)}... Total: Rs. ${totalAmount}`, 'info');
 
     res.status(201).json({
       id: saleId,
@@ -80,7 +210,8 @@ app.post('/api/sales', async (req, res) => {
       totalAmount,
       paymentMethod,
       createdAt,
-      synced: 0
+      synced: 0,
+      shiftId: activeShift.id
     });
   } catch (error) {
     try {

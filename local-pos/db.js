@@ -29,6 +29,18 @@ export async function getDb() {
 
   // Create tables
   await dbConnection.exec(`
+    CREATE TABLE IF NOT EXISTS register_shifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      register_id TEXT NOT NULL,
+      opening_float REAL NOT NULL,
+      closing_cash REAL,
+      actual_cash REAL,
+      discrepancy REAL,
+      opened_at TEXT NOT NULL,
+      closed_at TEXT,
+      status TEXT DEFAULT 'open'
+    );
+
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -45,7 +57,8 @@ export async function getDb() {
       payment_method TEXT NOT NULL,
       created_at TEXT NOT NULL,
       synced INTEGER DEFAULT 0,
-      synced_at TEXT
+      synced_at TEXT,
+      shift_id INTEGER REFERENCES register_shifts(id)
     );
 
     CREATE TABLE IF NOT EXISTS sale_items (
@@ -58,6 +71,14 @@ export async function getDb() {
       FOREIGN KEY (product_id) REFERENCES products(id)
     );
   `);
+
+  // Migrate sales column if DB was already created in previous runs
+  try {
+    await dbConnection.run('ALTER TABLE sales ADD COLUMN shift_id INTEGER REFERENCES register_shifts(id);');
+    console.log("Database schema successfully altered to include shift_id.");
+  } catch (e) {
+    // Column already exists, safe to ignore
+  }
 
   // Seed initial products if DB is empty
   const count = await dbConnection.get('SELECT COUNT(*) as count FROM products');
