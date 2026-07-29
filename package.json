@@ -1,0 +1,15 @@
+{
+  "name": "sync-retail",
+  "version": "1.0.0",
+  "description": "Offline-first synchronized Point of Sale system with SQLite and PostgreSQL",
+  "private": true,
+  "scripts": {
+    "local-pos:install": "cd local-pos && npm install",
+    "cloud-server:install": "cd cloud-server && npm install",
+    "install-all": "npm run local-pos:install && npm run cloud-server:install",
+    "local-pos:start": "cd local-pos && npm start",
+    "cloud-server:start": "cd cloud-server && npm start",
+    "docker:up": "docker-compose up --build -d",
+    "docker:down": "docker-compose down"
+  }
+}

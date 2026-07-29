@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sync Retail | Cloud Central</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="dashboard-container">
+    
+    <!-- Top Header -->
+    <header class="dashboard-header">
+      <div class="brand">
+        <div class="logo-icon">SR</div>
+        <div>
+          <h1>Cloud Central</h1>
+          <p>Sync Retail Real-time Aggregator Dashboard</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status-indicator">
+          <span class="dot pulse"></span>
+          <span>CLOUD API ONLINE</span>
+        </div>
+        <button id="refresh-btn" class="btn btn-secondary">
+          <i data-lucide="refresh-cw"></i> Refresh Data
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI Summary Grid -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon revenue"><i data-lucide="dollar-sign"></i></div>
+        <div class="kpi-info">
+          <span class="label">Total Cloud Revenue</span>
+          <h2 id="stat-revenue">$0.00</h2>
+        </div>
+      </div>
+      
+      <div class="kpi-card">
+        <div class="kpi-icon registers"><i data-lucide="terminal"></i></div>
+        <div class="kpi-info">
+          <span class="label">Synced POS Registers</span>
+          <h2 id="stat-registers">0</h2>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon transactions"><i data-lucide="shopping-cart"></i></div>
+        <div class="kpi-info">
+          <span class="label">Aggregated Sales</span>
+          <h2 id="stat-sales">0</h2>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Content Area -->
+    <div class="dashboard-content">
+      
+      <!-- Left Column: Catalog & Performance -->
+      <div class="content-column">
+        
+        <!-- Inventory Management -->
+        <div class="card card-table">
+          <div class="card-header">
+            <h2>Inventory Catalog Manager</h2>
+            <button id="add-product-btn" class="btn btn-primary btn-sm">
+              <i data-lucide="plus"></i> Add Product
+            </button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Product Name</th>
+                  <th>SKU</th>
+                  <th>Price</th>
+                  <th>Cloud Stock</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="catalog-table-body">
+                <!-- Products dynamically rendered here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Product Sales Performance List -->
+        <div class="card">
+          <div class="card-header">
+            <h2>Product Sales Breakdown</h2>
+          </div>
+          <div class="performance-list" id="performance-list">
+            <!-- Dynamic performance metrics injected here -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Live Ingestion Log -->
+      <div class="content-column">
+        
+        <div class="card card-table">
+          <div class="card-header">
+            <h2>Live Transaction Ingestion Log</h2>
+            <span class="badge" id="sync-active-badge">Listening...</span>
+          </div>
+          <div class="table-container large-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Register</th>
+                  <th>Transaction ID</th>
+                  <th>Total</th>
+                  <th>Payment</th>
+                  <th>Latency</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="sales-table-body">
+                <!-- Sales table rows dynamically injected here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Product Edit Modal -->
+  <div class="modal-overlay" id="product-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-title">Edit Product</h2>
+        <button id="close-modal-btn" class="btn-close">&times;</button>
+      </div>
+      <form id="product-form">
+        <input type="hidden" id="product-id">
+        
+        <div class="form-group">
+          <label for="product-name">Product Name</label>
+          <input type="text" id="product-name" required placeholder="e.g. Premium Chocolate Bar">
+        </div>
+        
+        <div class="form-group">
+          <label for="product-sku">SKU Code</label>
+          <input type="text" id="product-sku" required placeholder="e.g. CHO-PRM-100">
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="product-price">Price ($)</label>
+            <input type="number" id="product-price" step="0.01" min="0" required placeholder="12.50">
+          </div>
+          <div class="form-group">
+            <label for="product-stock">Stock Quantity</label>
+            <input type="number" id="product-stock" min="0" required placeholder="50">
+          </div>
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" id="cancel-modal-btn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Javascript -->
+  <script src="app.js"></script>
+</body>
+</html>

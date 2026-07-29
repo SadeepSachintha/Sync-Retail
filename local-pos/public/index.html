@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sync Retail | POS Register</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Left Sidebar: Sync & Configuration Panel -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-icon">SR</div>
+        <h1>Sync Retail</h1>
+        <span class="badge">POS REG</span>
+      </div>
+
+      <div class="card status-card">
+        <h3>Connection Status</h3>
+        <div class="status-indicator-container">
+          <div id="status-dot" class="status-dot online"></div>
+          <span id="status-text" class="status-text">ONLINE</span>
+        </div>
+
+        <div class="toggle-container">
+          <label class="switch-label">Simulate Offline Mode</label>
+          <label class="switch">
+            <input type="checkbox" id="network-toggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card sync-stats-card">
+        <h3>Sync Queue</h3>
+        <div class="queue-stat">
+          <span class="number" id="unsynced-count">0</span>
+          <span class="label">Sales Pending Sync</span>
+        </div>
+        <button id="sync-now-btn" class="btn btn-primary btn-block">
+          <i data-lucide="refresh-cw"></i> Sync Now
+        </button>
+      </div>
+
+      <div class="card logs-card">
+        <h3>Sync Log</h3>
+        <div class="logs-container" id="logs-container">
+          <div class="log-item info">
+            <span class="time">12:00:00</span>
+            <span class="msg">Register initialized</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="register-info">
+        <span id="register-id-display">Register: REG-01</span>
+      </div>
+    </aside>
+
+    <!-- Main Section: Products Grid -->
+    <main class="main-content">
+      <header class="main-header">
+        <div class="search-bar-container">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="search-input" placeholder="Search products by name or SKU...">
+        </div>
+        <div class="categories">
+          <button class="category-btn active" data-category="all">All Items</button>
+          <button class="category-btn" data-category="coffee">Coffee</button>
+          <button class="category-btn" data-category="souvenir">Souvenirs</button>
+          <button class="category-btn" data-category="eco">Eco/Care</button>
+          <button class="category-btn" data-category="food">Food</button>
+        </div>
+      </header>
+
+      <section class="products-section">
+        <div class="products-grid" id="products-grid">
+          <!-- Products will be injected here dynamically -->
+        </div>
+      </section>
+    </main>
+
+    <!-- Right Sidebar: Cart & Checkout -->
+    <section class="cart-sidebar">
+      <div class="cart-header">
+        <h2>Current Order</h2>
+        <button id="clear-cart-btn" class="btn-clear"><i data-lucide="trash-2"></i> Clear</button>
+      </div>
+
+      <div class="cart-items-container" id="cart-items-container">
+        <!-- Empty Cart State -->
+        <div class="empty-cart-state" id="empty-cart-state">
+          <i data-lucide="shopping-bag" class="empty-icon"></i>
+          <p>Cart is empty</p>
+        </div>
+      </div>
+
+      <div class="cart-summary">
+        <div class="summary-line">
+          <span>Subtotal</span>
+          <span id="subtotal-display">$0.00</span>
+        </div>
+        <div class="summary-line">
+          <span>VAT (10%)</span>
+          <span id="tax-display">$0.00</span>
+        </div>
+        <hr class="summary-divider">
+        <div class="summary-line total-line">
+          <span>Total</span>
+          <span id="total-display">$0.00</span>
+        </div>
+
+        <div class="payment-methods">
+          <h4>Payment Method</h4>
+          <div class="payment-grid">
+            <label class="payment-option active">
+              <input type="radio" name="payment-method" value="Cash" checked>
+              <i data-lucide="banknote"></i>
+              <span>Cash</span>
+            </label>
+            <label class="payment-option">
+              <input type="radio" name="payment-method" value="Card">
+              <i data-lucide="credit-card"></i>
+              <span>Card</span>
+            </label>
+            <label class="payment-option">
+              <input type="radio" name="payment-method" value="Mobile">
+              <i data-lucide="smartphone"></i>
+              <span>Mobile</span>
+            </label>
+          </div>
+        </div>
+
+        <button id="checkout-btn" class="btn btn-success btn-block btn-lg" disabled>
+          Place Order
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Receipt / Checkout Modal -->
+  <div class="modal-overlay" id="receipt-modal">
+    <div class="receipt-card">
+      <div class="receipt-header">
+        <div class="receipt-success-icon">
+          <i data-lucide="check"></i>
+        </div>
+        <h2>Transaction Complete</h2>
+        <p class="offline-badge-receipt" id="receipt-sync-badge">Saved Locally (Offline)</p>
+      </div>
+      <div class="receipt-body">
+        <div class="receipt-info-row">
+          <span>Receipt ID:</span>
+          <span id="receipt-id" class="bold">#1234-5678</span>
+        </div>
+        <div class="receipt-info-row">
+          <span>Date/Time:</span>
+          <span id="receipt-time">2026-07-29 12:00</span>
+        </div>
+        <div class="receipt-info-row">
+          <span>Payment Method:</span>
+          <span id="receipt-payment">Cash</span>
+        </div>
+        <hr class="receipt-divider">
+        <div class="receipt-items" id="receipt-items-list">
+          <!-- Items injected here -->
+        </div>
+        <hr class="receipt-divider">
+        <div class="receipt-total-row">
+          <span>Total Paid:</span>
+          <span id="receipt-total" class="bold total-amount">$0.00</span>
+        </div>
+      </div>
+      <div class="receipt-footer">
+        <button id="close-receipt-btn" class="btn btn-primary btn-block">New Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Javascript -->
+  <script src="app.js"></script>
+</body>
+</html>

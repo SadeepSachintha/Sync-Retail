@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: sync_retail_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_pass
+      POSTGRES_DB: sync_retail_cloud
+    ports:
+      - "5435:5432" # Use 5435 on host to prevent conflicts with other local PG servers
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - sync_retail_network
+
+  cloud-server:
+    build: ./cloud-server
+    container_name: sync_retail_cloud_server
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres_pass
+      - DB_NAME=sync_retail_cloud
+    depends_on:
+      - db
+    networks:
+      - sync_retail_network
+
+  local-pos:
+    build: ./local-pos
+    container_name: sync_retail_local_pos
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CLOUD_SERVER_URL=http://cloud-server:4000
+      - REGISTER_ID=REG-01
+    volumes:
+      - posdata:/app/data
+    depends_on:
+      - cloud-server
+    networks:
+      - sync_retail_network
+
+volumes:
+  pgdata:
+  posdata:
+
+networks:
+  sync_retail_network:
+    name: sync_retail_network
