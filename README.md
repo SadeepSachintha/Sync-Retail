@@ -13,14 +13,14 @@ This project is enhanced with enterprise-grade register drawers, printer formatt
 1. **Register Shift Gate & Reconcile Drawer**:
    - Blocks register checkout until cashiers input an opening cash float.
    - Summarizes cash, credit card, and mobile QR sales.
-   - closing a shift triggers expected cash balance calculations, shortages/overages, and prompts a print-ready reconciliation audit report.
+   - Closing a shift triggers expected cash balance calculations, shortages/overages, and prompts a print-ready reconciliation audit report.
 2. **Audio Synthesizer scan cues**:
    - Synthesizes clean sound frequencies using the HTML5 Web Audio API (no external file dependencies):
-     - `success`: High-frequency sine scan beep (cart add/checkout success).
-     - `error`: Sawtooth buzzer tone (unopened shift or offline error warnings).
+     - `success`: Waveform confirmation scan beep (cart add/checkout success).
+     - `error`: Warning buzz tone (unopened shift or offline error warnings).
      - `trash`: Frequency-sweeping triangle wave (cart list clears).
 3. **Cart-Level Discount Engine**:
-   - Supports deduction adjustments as either percentages (`%`) or fixed values (`Rs.`), recalculating subtotals, VAT tax (10%), and grand totals.
+   - Supports deduction adjustments as either percentages (`%`) or fixed values (`Rs.`), recalculating subtotals, VAT tax, and grand totals.
 4. **Code39 Vector Barcode Sticker Generator**:
    - Renders alphanumeric vector SVG Code39 barcodes client-side without third-party API dependencies.
    - Toggles layouts to print a single sticker label or a sheet of 30 stickers (A4 grid).
@@ -31,6 +31,18 @@ This project is enhanced with enterprise-grade register drawers, printer formatt
    - Clicking an empty search bar displays the top 5 in-stock products as rapid checkout recommendations.
 7. **Sri Lankan Rupee (LKR) localization**:
    - Formats all currencies throughout register panels, receipts, and the cloud admin aggregator dashboard in **Rs. / LKR**.
+8. **Hardware Barcode Scanner Integration (Keyboard Emulation)**:
+   - Buffers keystroke events occurring at sub-40ms intervals globally to intercept laser scans client-side, bypassing manual textbox input handlers.
+9. **Live WebSockets Dashboard Push**:
+   - Synchronizes transaction handshakes in real time. Sales synched from POS registers are pushed to cloud dashboards instantly with indigo glow flash animations and updated KPI calculations.
+10. **Incremental Catalog Sync**:
+    - Replicates catalog modifications using vector timestamp checks. Register clients request only products updated since the maximum local catalog version, reducing network transfer overhead.
+11. **Predictive AI Restock Alerts (FastAPI ML forecasting)**:
+    - Bridges cloud inventory aggregates with a FastAPI forecasting regressor model. Displays glowing restock indicator status badges (*Safety Alert*, *Reorder Suggested*, *Healthy*) and dynamically draws SVG line charts showing 14-day forecasts.
+12. **Local Database Encryption (AES-256-CBC)**:
+    - Encrypts sales figures, payment methods, cart items, and shift float variables at rest in SQLite using randomly generated Initialization Vectors (IV).
+13. **Cross-Tab Settings Broadcast (HTML5 BroadcastChannel)**:
+    - Automatically synchronizes adjustments made in setting tabs (VAT tax rate slider, synthesizer waveform selections), active register shifts, and network toggles across all open register browser tabs.
 
 ---
 
@@ -40,7 +52,7 @@ This project is enhanced with enterprise-grade register drawers, printer formatt
 graph TD
     subgraph Local POS Client [port 3000]
         POS_UI[HTML/CSS/JS Glassmorphic POS] <--> POS_API[Express.js Server]
-        POS_API <--> Local_DB[(SQLite Database)]
+        POS_API <--> Local_DB[(SQLite Database - AES Encrypted at Rest)]
         POS_API -- Sync Loop (5s) --> Sync_Manager[Sync Manager]
     end
 
@@ -50,6 +62,7 @@ graph TD
     end
 
     Sync_Manager -- Sync Sales & Catalog --> Cloud_API
+    Cloud_API -- WebSocket Push --> Cloud_Dashboard
 ```
 
 ---
@@ -61,6 +74,7 @@ graph TD
 │   ├── data/                # SQLite database persistence
 │   ├── public/              # POS Frontend assets (glassmorphic theme)
 │   ├── db.js                # SQLite schema (shifts, sales, products)
+│   ├── crypto.js            # Cryptographic module for column-level encryption
 │   ├── server.js            # Express API & shift/sync manager endpoints
 │   └── Dockerfile           # Docker image setup
 │
@@ -72,7 +86,10 @@ graph TD
 │   └── Dockerfile           # Docker image setup
 │
 ├── scripts/
-│   └── test-sync.js         # Integration E2E test script (including shift gates)
+│   ├── test-sync.js         # E2E sync and shift gate verification test
+│   ├── test-scanner.js      # Timing-based barcode emulation validator
+│   ├── test-incremental.js  # Catalog delta replication validator
+│   └── test-encryption.js   # Raw database encryption-at-rest auditor
 │
 ├── docker-compose.yml       # Orchestrates local client, cloud server, and DB
 └── package.json             # Workspace-level helper scripts
@@ -109,19 +126,29 @@ npm.cmd run local-pos:start
 
 ## Running Integration Diagnostics
 
-We have provided a automated test script that runs a complete offline checkout and synchronization test. 
+We have provided several automated validation suites to test the advanced architecture enhancements. 
 
-With both servers running, run:
+### 1. Shift Reconciliation & Sync Audit
+Ensures shifting flows are blocked before cash initialization, aggregates transactions offline, and uploads them successfully upon connection restoration:
 ```bash
 node scripts/test-sync.js
 ```
 
-### Test Flow:
-1. Validates checkout is locked before a shift is open.
-2. Opens a register shift with `Rs. 5,000` float.
-3. Toggles network to **OFFLINE**.
-4. Checkout transaction, verifying it is stored in local SQLite and linked to active shift ID.
-5. Verifies transaction is **absent** from cloud database.
-6. Restores connection and forces sync.
-7. Asserts local queue is empty and transaction has reconciled in the Postgres/fallback database.
-8. Closes the register shift, counting actual cash and verifying Rs. 0 discrepancy.
+### 2. Barcode Keystroke Emulation
+Validates keyboard events generated under 40ms globally are correctly intercepted:
+```bash
+node scripts/test-scanner.js
+```
+
+### 3. Catalog Delta Incremental Sync
+Validates vector clock parameters fetch only changed catalog rows, showing zero-bandwidth when already synchronized:
+```bash
+node scripts/test-incremental.js
+```
+
+### 4. Database-At-Rest Encryption
+Directly audits raw SQLite binary files to assert transaction records are stored as encrypted ciphers that fail numerical parsing:
+```bash
+cd local-pos
+$env:NODE_PATH="node_modules"; node ../scripts/test-encryption.js
+```

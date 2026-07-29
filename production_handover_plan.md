@@ -48,6 +48,8 @@ REGISTER_ID=REG-01
 CLOUD_SERVER_URL=https://sync-retail-cloud.onrender.com
 # Secure registration key matching cloud-server config
 REGISTER_API_KEY=reg_key_abc123_xyz
+# Secret key used to encrypt the local SQLite database at rest (AES-256-CBC)
+LOCAL_DB_KEY=sync_retail_secret_pos_key_2026
 ```
 
 ### B. Central Cloud Server Configuration
@@ -91,6 +93,7 @@ To safeguard transactional API endpoints in public cloud deployments, implement 
 - **Header Authentication**: The cloud server `/api/sync/sales` and `/api/sync/catalog` endpoints check for an API Key header:
   `X-Register-API-Key`. Requests missing or matching invalid keys are denied with `401 Unauthorized`.
 - **Transaction Idempotency**: All sales uploaded by registers must carry their local UUIDs. The cloud Postgres server executes duplicate checks before starting transactions to ensure network retries do not result in duplicate ledger entries.
+- **Local SQLite Encryption at Rest**: Encrypt all financial totals, payment methods, transaction item quantities, unit prices, and active shift floats inside the register SQLite database at rest using AES-256-CBC ciphers. Stolen or physically compromised register hardware will not leak store revenue margins or cash drawer float balances.
 
 ---
 
@@ -98,9 +101,9 @@ To safeguard transactional API endpoints in public cloud deployments, implement 
 
 - **Inventory Deductions**: Stock deductions are processed on the Cloud server when a transaction is synced.
 - **Out-of-Stock Overdrafts**: If an offline sale is synced and the item has since become out-of-stock on the cloud database, the transaction is **still accepted** (refusing finalized cash/card transactions made offline is not possible). The product stock level is decremented below 0 (negative stock) and flagged as "Overdraft" in the dashboard logs for manual warehouse reconciliation.
-- **Catalog Synchronization**: The local register client queries the cloud catalog `/api/sync/catalog` every 5 seconds. To avoid overriding local stock deductions of offline sales that haven't synced yet, the local POS client computes:
+- **Catalog Synchronization (Incremental Delta Replication)**: The local register client queries the cloud catalog `/api/sync/catalog` passing `?since=MAX_TIMESTAMP`. Pulls and updates only changed products to reduce network overhead. To avoid overriding local stock deductions of offline sales that haven't synced yet, the local POS client computes:
   `local_stock = cloud_stock - (sum of product quantities in unsynced local sales)`
-  before saving catalog stock counts back to SQLite.
+  before saving catalog stock counts back to SQLite (decrypting quantities in memory dynamically to run inventory checks).
 
 ---
 
