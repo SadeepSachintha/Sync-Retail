@@ -4,16 +4,33 @@ An **"Air-Gap Friendly"** Point of Sale (POS) register architecture designed for
 
 The system operates 100% locally and offline using an embedded SQLite database, queuing transactions, and automatically synchronizing them with a central PostgreSQL cloud server (with a smart local SQLite fallback) the moment connection is restored.
 
+This project is enhanced with enterprise-grade register drawers, printer formatting, and barcode scanning utilities.
+
 ---
 
-## Key Features
+## High-Fidelity POS Enhancements
 
-- **100% Offline-First POS**: Checkout cart math, receipt rendering, and inventory decrement work locally without internet dependency.
-- **Background Synchronization Worker**: Periodically checks for cloud server availability and pushes queued local SQLite data to the central database.
-- **Conflict & Reconcile Engine**: Adjusts local stock limits based on cloud catalog changes without overriding active offline sales.
-- **Simulated Network Toggle**: Built-in switches on the interface let you disconnect POS registers to test queues and watch automatic reconciliation occur in real-time.
-- **Latency Analytics Logging**: Tracks latency/delay (the time difference between a device purchase and database ingestion) to measure offline recovery speed.
-- **Flexible Database Architecture**: Central cloud server supports PostgreSQL, but falls back automatically to SQLite for easy host testing if Postgres is unavailable.
+1. **Register Shift Gate & Reconcile Drawer**:
+   - Blocks register checkout until cashiers input an opening cash float.
+   - Summarizes cash, credit card, and mobile QR sales.
+   - closing a shift triggers expected cash balance calculations, shortages/overages, and prompts a print-ready reconciliation audit report.
+2. **Audio Synthesizer scan cues**:
+   - Synthesizes clean sound frequencies using the HTML5 Web Audio API (no external file dependencies):
+     - `success`: High-frequency sine scan beep (cart add/checkout success).
+     - `error`: Sawtooth buzzer tone (unopened shift or offline error warnings).
+     - `trash`: Frequency-sweeping triangle wave (cart list clears).
+3. **Cart-Level Discount Engine**:
+   - Supports deduction adjustments as either percentages (`%`) or fixed values (`Rs.`), recalculating subtotals, VAT tax (10%), and grand totals.
+4. **Code39 Vector Barcode Sticker Generator**:
+   - Renders alphanumeric vector SVG Code39 barcodes client-side without third-party API dependencies.
+   - Toggles layouts to print a single sticker label or a sheet of 30 stickers (A4 grid).
+5. **Printer-Friendly CSS Overrides**:
+   - High-contrast black-and-white print media sheets hide viewport containers (navigation sidebar, product grids, search inputs) to isolate and print thermal receipts, shift audits, and barcode sheets.
+6. **Smart SKU Autocomplete & Zero-State Lookup**:
+   - Offers real-time name/SKU autocomplete dropdowns with key listener controls (arrows + enter checkout).
+   - Clicking an empty search bar displays the top 5 in-stock products as rapid checkout recommendations.
+7. **Sri Lankan Rupee (LKR) localization**:
+   - Formats all currencies throughout register panels, receipts, and the cloud admin aggregator dashboard in **Rs. / LKR**.
 
 ---
 
@@ -43,8 +60,8 @@ graph TD
 ├── local-pos/               # Local register instance application
 │   ├── data/                # SQLite database persistence
 │   ├── public/              # POS Frontend assets (glassmorphic theme)
-│   ├── db.js                # SQLite schema and seeding logic
-│   ├── server.js            # Express API & Sync manager worker loop
+│   ├── db.js                # SQLite schema (shifts, sales, products)
+│   ├── server.js            # Express API & shift/sync manager endpoints
 │   └── Dockerfile           # Docker image setup
 │
 ├── cloud-server/            # Central database aggregator
@@ -55,7 +72,7 @@ graph TD
 │   └── Dockerfile           # Docker image setup
 │
 ├── scripts/
-│   └── test-sync.js         # Integration E2E test script
+│   └── test-sync.js         # Integration E2E test script (including shift gates)
 │
 ├── docker-compose.yml       # Orchestrates local client, cloud server, and DB
 └── package.json             # Workspace-level helper scripts
@@ -65,49 +82,28 @@ graph TD
 
 ## Getting Started (Standalone Host Execution)
 
-If Docker is not running on your host, you can run the entire system locally using Node:
-
 ### 1. Install Dependencies
 From the root workspace, run:
 ```bash
 npm.cmd run install-all
 ```
-*(This installs packages for both `local-pos` and `cloud-server`.)*
 
 ### 2. Start Cloud Server
 In a terminal, run:
 ```bash
 npm.cmd run cloud-server:start
 ```
-*The cloud database will detect that PostgreSQL is not running and fall back to `cloud_central.sqlite` automatically.*
+*The cloud database will automatically fall back to SQLite if PostgreSQL is unavailable.*
 
 ### 3. Start Local POS Server
 In a separate terminal, run:
 ```bash
 npm.cmd run local-pos:start
 ```
-*The register will seed itself and start polling `http://localhost:4000` to sync data.*
 
 ### 4. Open Interfaces
 - **POS Register Client**: [http://localhost:3000](http://localhost:3000)
 - **Cloud Central Dashboard**: [http://localhost:4000](http://localhost:4000)
-
----
-
-## Running inside Docker Compose
-
-If Docker and Postgres are running, spin up the entire cluster with:
-```bash
-docker-compose up --build -d
-```
-- Local POS runs at: [http://localhost:3000](http://localhost:3000)
-- Cloud Dashboard runs at: [http://localhost:4000](http://localhost:4000)
-- Central Postgres Database runs on host port: `5435`
-
-To stop the containers:
-```bash
-docker-compose down -v
-```
 
 ---
 
@@ -121,8 +117,11 @@ node scripts/test-sync.js
 ```
 
 ### Test Flow:
-1. Puts the local POS into **ONLINE** mode, triggers sync, and measures starting queue.
-2. Toggles simulated connection to **OFFLINE**.
-3. Registers a sale on the POS client. Asserts it is stored locally in SQLite but is **absent** from the cloud database.
-4. Toggles connection to **ONLINE** and forces a synchronization.
-5. Asserts the local queue is empty and the transaction has been reconciled in the Postgres database, printing sync delay.
+1. Validates checkout is locked before a shift is open.
+2. Opens a register shift with `Rs. 5,000` float.
+3. Toggles network to **OFFLINE**.
+4. Checkout transaction, verifying it is stored in local SQLite and linked to active shift ID.
+5. Verifies transaction is **absent** from cloud database.
+6. Restores connection and forces sync.
+7. Asserts local queue is empty and transaction has reconciled in the Postgres/fallback database.
+8. Closes the register shift, counting actual cash and verifying Rs. 0 discrepancy.
