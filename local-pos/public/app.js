@@ -13,6 +13,8 @@ let barcodeModalProduct = null;
 let barcodePrintQty = 'single'; // 'single' or 'sheet'
 let activeSuggestionIndex = -1;
 let filteredSuggestions = [];
+let vatRate = 0.10;
+let oscillatorType = 'sine';
 
 // DOM elements
 const productsGrid = document.getElementById('products-grid');
@@ -37,9 +39,16 @@ const closeReceiptBtn = document.getElementById('close-receipt-btn');
 // Advanced POS DOM elements
 const navPosBtn = document.getElementById('nav-pos-btn');
 const navShiftBtn = document.getElementById('nav-shift-btn');
+const navSettingsBtn = document.getElementById('nav-settings-btn');
 const posTerminalView = document.getElementById('pos-terminal-view');
 const posCartPanel = document.getElementById('pos-cart-panel');
 const shiftPanelView = document.getElementById('shift-panel-view');
+const settingsPanelView = document.getElementById('settings-panel-view');
+const vatRateSelect = document.getElementById('vat-rate-select');
+const soundOscSelect = document.getElementById('sound-osc-select');
+
+// Broadcast Channel API for cross-tab synchronization
+const configChannel = new BroadcastChannel('pos_config_channel');
 const shiftGateModal = document.getElementById('shift-gate-modal');
 const openShiftForm = document.getElementById('open-shift-form');
 const openingFloatInput = document.getElementById('opening-float-input');
@@ -91,21 +100,21 @@ function playPOSSound(type) {
     gain.connect(ctx.destination);
 
     if (type === 'success') {
-      osc.type = 'sine';
+      osc.type = oscillatorType;
       osc.frequency.setValueAtTime(1450, ctx.currentTime);
       gain.gain.setValueAtTime(0.15, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.08);
     } else if (type === 'error') {
-      osc.type = 'sawtooth';
+      osc.type = oscillatorType;
       osc.frequency.setValueAtTime(120, ctx.currentTime);
       gain.gain.setValueAtTime(0.15, ctx.currentTime);
       gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.25);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.25);
     } else if (type === 'trash') {
-      osc.type = 'triangle';
+      osc.type = oscillatorType;
       osc.frequency.setValueAtTime(250, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.3);
       gain.gain.setValueAtTime(0.20, ctx.currentTime);
@@ -580,7 +589,7 @@ function renderCart() {
   }
 
   const netSubtotal = Math.max(0, grossSubtotal - discountAmount);
-  const tax = netSubtotal * 0.10; // 10% VAT tax
+  const tax = netSubtotal * vatRate; // Dynamic VAT tax
   const total = netSubtotal + tax;
 
   subtotalDisplay.innerText = formatLKR(grossSubtotal);
@@ -633,18 +642,32 @@ discValBtn.addEventListener('click', () => {
 navPosBtn.addEventListener('click', () => {
   navPosBtn.classList.add('active');
   navShiftBtn.classList.remove('active');
+  navSettingsBtn.classList.remove('active');
   posTerminalView.style.display = 'flex';
   posCartPanel.style.display = 'flex';
   shiftPanelView.style.display = 'none';
+  settingsPanelView.style.display = 'none';
 });
 
 navShiftBtn.addEventListener('click', async () => {
   navShiftBtn.classList.add('active');
   navPosBtn.classList.remove('active');
+  navSettingsBtn.classList.remove('active');
   posTerminalView.style.display = 'none';
   posCartPanel.style.display = 'none';
   shiftPanelView.style.display = 'flex';
+  settingsPanelView.style.display = 'none';
   await updateShiftDashboardTotals();
+});
+
+navSettingsBtn.addEventListener('click', () => {
+  navSettingsBtn.classList.add('active');
+  navPosBtn.classList.remove('active');
+  navShiftBtn.classList.remove('active');
+  posTerminalView.style.display = 'none';
+  posCartPanel.style.display = 'none';
+  shiftPanelView.style.display = 'none';
+  settingsPanelView.style.display = 'flex';
 });
 
 // Close shift triggers
@@ -677,6 +700,7 @@ openShiftForm.addEventListener('submit', async (e) => {
       playPOSSound('success');
       showToast("Register Shift Opened!", "success");
       await fetchActiveShift();
+      configChannel.postMessage({ type: 'shift_change' });
     } else {
       playPOSSound('error');
       alert(data.message || "Failed to open shift");
@@ -717,6 +741,7 @@ closeShiftForm.addEventListener('submit', async (e) => {
       
       // Reload shift gate block
       await fetchActiveShift();
+      configChannel.postMessage({ type: 'shift_change' });
     } else {
       playPOSSound('error');
       alert(data.message || "Failed to close shift");
@@ -922,6 +947,7 @@ networkToggle.addEventListener('change', async (e) => {
     });
     if (!res.ok) throw new Error('Failed to set simulated network');
     await fetchSyncStatus();
+    configChannel.postMessage({ type: 'network_change', offline });
   } catch (error) {
     console.error('Error toggling simulated network:', error);
     e.target.checked = !offline;
@@ -978,7 +1004,7 @@ checkoutBtn.addEventListener('click', async () => {
   }
 
   const netSubtotal = Math.max(0, grossSubtotal - discountAmount);
-  const tax = netSubtotal * 0.10;
+  const tax = netSubtotal * vatRate;
   const totalAmount = netSubtotal + tax;
 
   checkoutBtn.disabled = true;
@@ -1133,6 +1159,82 @@ function escapeHTML(str) {
   );
 }
 
+// ==========================================================
+// 4. HARDWARE BARCODE SCANNER INTERCEPTOR (KEYBOARD EMULATION)
+// ==========================================================
+let barcodeBuffer = '';
+let lastKeyTime = 0;
+
+window.addEventListener('keydown', (e) => {
+  // Ignore scanner buffer collection if cashier is currently focusing in an input form field (except search-input)
+  const activeEl = document.activeElement;
+  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') && activeEl.id !== 'search-input') {
+    return;
+  }
+
+  const currentTime = Date.now();
+  const timeDiff = currentTime - lastKeyTime;
+  lastKeyTime = currentTime;
+
+  // Real physical scanners typings have inter-char intervals under 35-40ms
+  if (timeDiff < 40) {
+    if (e.key === 'Enter') {
+      if (barcodeBuffer.length > 2) {
+        addSkuByBarcode(barcodeBuffer.trim());
+      }
+      barcodeBuffer = '';
+      e.preventDefault();
+    } else if (e.key.length === 1) {
+      barcodeBuffer += e.key;
+    }
+  } else {
+    // Regular human typing (reset buffer with current key)
+    barcodeBuffer = e.key.length === 1 ? e.key : '';
+  }
+});
+
+function addSkuByBarcode(barcode) {
+  if (!barcode) return;
+  const cleanBarcode = barcode.toUpperCase().trim();
+  
+  // Find product by SKU
+  const product = products.find(p => p.sku.toUpperCase() === cleanBarcode);
+  if (product) {
+    addToCart(product.id);
+    showToast(`Scanned: ${product.name} added to cart`, 'success');
+  } else {
+    playPOSSound('error');
+    showToast(`Scanned unknown SKU: ${barcode}`, 'warning');
+  }
+}
+
+// Global testing helper to simulate hardware scanner keyboard emulation via developer console
+window.simulateScanner = function(sku) {
+  console.log(`[TEST] Starting mock scan for SKU: ${sku}`);
+  let idx = 0;
+  let lastTime = Date.now();
+  
+  function typeChar() {
+    if (idx >= sku.length) {
+      // Dispatch Enter
+      const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      window.dispatchEvent(enterEvent);
+      console.log(`[TEST] Dispatched Enter. Mock scan complete.`);
+      return;
+    }
+    
+    const char = sku[idx];
+    const keyEvent = new KeyboardEvent('keydown', { key: char, bubbles: true });
+    window.dispatchEvent(keyEvent);
+    
+    idx++;
+    // Simulate rapid input at 12ms interval (well under 40ms threshold)
+    setTimeout(typeChar, 12);
+  }
+  
+  typeChar();
+};
+
 // Startup
 async function init() {
   await fetchActiveShift();
@@ -1144,3 +1246,45 @@ async function init() {
 }
 
 init();
+
+// Settings Event Listeners & Broadcast Channel Synchronization
+vatRateSelect.addEventListener('change', (e) => {
+  vatRate = parseFloat(e.target.value);
+  updateCartDisplay();
+  configChannel.postMessage({
+    type: 'setting_change',
+    vatRate,
+    oscillatorType
+  });
+});
+
+soundOscSelect.addEventListener('change', (e) => {
+  oscillatorType = e.target.value;
+  playPOSSound('success'); // Play confirmation pitch
+  configChannel.postMessage({
+    type: 'setting_change',
+    vatRate,
+    oscillatorType
+  });
+});
+
+configChannel.onmessage = async (e) => {
+  console.log('Received settings broadcast message:', e.data);
+  if (e.data.type === 'shift_change') {
+    await fetchActiveShift();
+    showToast('Shift state synchronized from another tab.', 'info');
+  } else if (e.data.type === 'network_change') {
+    await fetchSyncStatus();
+    showToast(`Network state synced: ${e.data.offline ? 'OFFLINE' : 'ONLINE'}`, 'info');
+  } else if (e.data.type === 'setting_change') {
+    vatRate = e.data.vatRate;
+    oscillatorType = e.data.oscillatorType;
+    
+    // Sync settings forms dropdown elements
+    vatRateSelect.value = vatRate.toFixed(2);
+    soundOscSelect.value = oscillatorType;
+    
+    updateCartDisplay();
+    showToast('System configuration updated via cross-tab broadcast.', 'info');
+  }
+};

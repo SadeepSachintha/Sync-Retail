@@ -28,6 +28,7 @@
       <div class="sidebar-nav">
         <button class="nav-btn active" id="nav-pos-btn"><i data-lucide="shopping-cart"></i> POS Terminal</button>
         <button class="nav-btn" id="nav-shift-btn"><i data-lucide="calculator"></i> Register Shift</button>
+        <button class="nav-btn" id="nav-settings-btn"><i data-lucide="settings"></i> System Settings</button>
       </div>
 
       <div class="card status-card">
@@ -149,6 +150,48 @@
         </div>
       </div>
     </main>
+
+    <!-- Settings Panel View (Hidden by default) -->
+    <main class="main-content" id="settings-panel-view" style="display: none; padding: 24px; overflow-y: auto; flex-direction: column; gap: 24px;">
+      <h1 style="font-family: var(--font-family-title); font-size: 24px; margin-bottom: 20px;">System Configuration</h1>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 800px;">
+        <div class="card">
+          <h3 style="margin-bottom: 15px;">Tax Configurations</h3>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div>
+              <label for="vat-rate-select" style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 8px;">VAT TAX RATE</label>
+              <select id="vat-rate-select" style="width: 100%; background: #1a1b24; color: white; border: 1px solid var(--border-light); border-radius: 6px; padding: 8px; outline: none; font-size: 13px;">
+                <option value="0.10" selected>10% Standard VAT</option>
+                <option value="0.12">12% Standard VAT</option>
+                <option value="0.15">15% Luxury VAT</option>
+                <option value="0.00">0% Tax Exempt</option>
+              </select>
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+              * Standard VAT will be applied to the net subtotal calculation during checkout calculations.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom: 15px;">Synthesizer Oscillator Settings</h3>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div>
+              <label for="sound-osc-select" style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 8px;">WAVEFORM SHAPE</label>
+              <select id="sound-osc-select" style="width: 100%; background: #1a1b24; color: white; border: 1px solid var(--border-light); border-radius: 6px; padding: 8px; outline: none; font-size: 13px;">
+                <option value="sine" selected>Sine wave (Sleek)</option>
+                <option value="triangle">Triangle wave (Mellow)</option>
+                <option value="sawtooth">Sawtooth wave (Retro)</option>
+                <option value="square">Square wave (Arcade)</option>
+              </select>
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+              * Select the physical hardware sound synthesizer waveform style for confirmation audio cues.
+            </p>
+          </div>
+        </div>
+      </div>
 
     <!-- Right Sidebar: Cart & Checkout -->
     <section class="cart-sidebar" id="pos-cart-panel">

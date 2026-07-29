@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { getDb } from './db.js';
 import crypto from 'crypto';
+import { encrypt, decrypt } from './crypto.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,7 +31,15 @@ app.get('/api/shifts/active', async (req, res) => {
     const db = await getDb();
     const activeShift = await db.get("SELECT * FROM register_shifts WHERE status = 'open' LIMIT 1");
     if (activeShift) {
-      res.json({ status: 'success', data: activeShift });
+      // Decrypt values for client views
+      const decryptedShift = {
+        ...activeShift,
+        opening_float: decrypt(activeShift.opening_float),
+        closing_cash: decrypt(activeShift.closing_cash),
+        actual_cash: decrypt(activeShift.actual_cash),
+        discrepancy: decrypt(activeShift.discrepancy)
+      };
+      res.json({ status: 'success', data: decryptedShift });
     } else {
       res.status(404).json({ status: 'error', message: 'No active shift found' });
     }
@@ -43,18 +52,24 @@ app.get('/api/shifts/active', async (req, res) => {
 app.get('/api/shifts/active/totals', async (req, res) => {
   try {
     const db = await getDb();
-    const activeShift = await db.get("SELECT id FROM register_shifts WHERE status = 'open' LIMIT 1");
+    const activeShift = await db.get("SELECT id, opening_float FROM register_shifts WHERE status = 'open' LIMIT 1");
     if (!activeShift) {
       return res.status(404).json({ status: 'error', message: 'No active shift found' });
     }
 
-    const cashRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Cash'", [activeShift.id]);
-    const cardRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Card'", [activeShift.id]);
-    const mobileRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Mobile'", [activeShift.id]);
-
-    const cash = cashRow.total;
-    const card = cardRow.total;
-    const mobile = mobileRow.total;
+    // Query sales and decrypt in-memory to accumulate aggregates
+    const sales = await db.all("SELECT total_amount, payment_method FROM sales WHERE shift_id = ?", [activeShift.id]);
+    
+    let cash = 0;
+    let card = 0;
+    let mobile = 0;
+    for (const s of sales) {
+      const amt = decrypt(s.total_amount);
+      const method = decrypt(s.payment_method);
+      if (method === 'Cash') cash += amt;
+      else if (method === 'Card') card += amt;
+      else if (method === 'Mobile') mobile += amt;
+    }
 
     res.json({
       status: 'success',
@@ -79,9 +94,11 @@ app.post('/api/shifts/open', async (req, res) => {
     }
 
     const openedAt = new Date().toISOString();
+    // Encrypt opening float at rest
+    const encryptedFloat = encrypt(opening_float);
     const result = await db.run(
       'INSERT INTO register_shifts (register_id, opening_float, opened_at, status) VALUES (?, ?, ?, ?)',
-      [REGISTER_ID, opening_float, openedAt, 'open']
+      [REGISTER_ID, encryptedFloat, openedAt, 'open']
     );
 
     addSyncLog(`Register Shift Opened with float: Rs. ${opening_float}`, 'success');
@@ -104,24 +121,35 @@ app.post('/api/shifts/close', async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'No active register shift to close' });
     }
 
-    // Expected totals calculation
-    const cashSalesRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Cash'", [activeShift.id]);
-    const cardSalesRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Card'", [activeShift.id]);
-    const mobileSalesRow = await db.get("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales WHERE shift_id = ? AND payment_method = 'Mobile'", [activeShift.id]);
+    // Query sales and decrypt in-memory to compile reconciliation audit
+    const sales = await db.all("SELECT total_amount, payment_method FROM sales WHERE shift_id = ?", [activeShift.id]);
+    
+    let cashSales = 0;
+    let cardSales = 0;
+    let mobileSales = 0;
+    for (const s of sales) {
+      const amt = decrypt(s.total_amount);
+      const method = decrypt(s.payment_method);
+      if (method === 'Cash') cashSales += amt;
+      else if (method === 'Card') cardSales += amt;
+      else if (method === 'Mobile') mobileSales += amt;
+    }
 
-    const cashSales = cashSalesRow.total;
-    const cardSales = cardSalesRow.total;
-    const mobileSales = mobileSalesRow.total;
-
-    const expectedClosingCash = activeShift.opening_float + cashSales;
+    const decryptedOpeningFloat = decrypt(activeShift.opening_float);
+    const expectedClosingCash = decryptedOpeningFloat + cashSales;
     const discrepancy = actual_cash - expectedClosingCash;
     const closedAt = new Date().toISOString();
+
+    // Encrypt summary variables at rest
+    const encryptedExpected = encrypt(expectedClosingCash);
+    const encryptedActual = encrypt(actual_cash);
+    const encryptedDiscrepancy = encrypt(discrepancy);
 
     await db.run(
       `UPDATE register_shifts 
        SET closing_cash = ?, actual_cash = ?, discrepancy = ?, closed_at = ?, status = 'closed' 
        WHERE id = ?`,
-      [expectedClosingCash, actual_cash, discrepancy, closedAt, activeShift.id]
+      [encryptedExpected, encryptedActual, encryptedDiscrepancy, closedAt, activeShift.id]
     );
 
     addSyncLog(`Register Shift Closed. Discrepancy: Rs. ${discrepancy.toFixed(2)}`, discrepancy === 0 ? 'success' : 'warning');
@@ -130,7 +158,7 @@ app.post('/api/shifts/close', async (req, res) => {
       status: 'success',
       data: {
         id: activeShift.id,
-        opening_float: activeShift.opening_float,
+        opening_float: decryptedOpeningFloat,
         cash_sales: cashSales,
         card_sales: cardSales,
         mobile_sales: mobileSales,
@@ -158,7 +186,7 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// Process a POS transaction locally (offline-first)
+// Process a POS transaction locally (offline-first) with Column-Level Encryption at Rest
 app.post('/api/sales', async (req, res) => {
   const { items, paymentMethod, totalAmount } = req.body;
   if (!items || items.length === 0) {
@@ -180,17 +208,21 @@ app.post('/api/sales', async (req, res) => {
     // SQLite Transaction
     await db.run('BEGIN TRANSACTION;');
 
-    // Insert sale metadata with shift_id link
+    // Insert sale metadata (encrypted fields: total_amount, payment_method)
+    const encryptedTotal = encrypt(totalAmount);
+    const encryptedMethod = encrypt(paymentMethod);
     await db.run(
       'INSERT INTO sales (id, register_id, total_amount, payment_method, created_at, synced, shift_id) VALUES (?, ?, ?, ?, ?, 0, ?)',
-      [saleId, REGISTER_ID, totalAmount, paymentMethod, createdAt, activeShift.id]
+      [saleId, REGISTER_ID, encryptedTotal, encryptedMethod, createdAt, activeShift.id]
     );
 
-    // Insert sale items and decrement stock
+    // Insert sale items (encrypted fields: quantity, unit_price)
     for (const item of items) {
+      const encryptedQty = encrypt(item.quantity);
+      const encryptedPrice = encrypt(item.price);
       await db.run(
         'INSERT INTO sale_items (sale_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)',
-        [saleId, item.productId, item.quantity, item.price]
+        [saleId, item.productId, encryptedQty, encryptedPrice]
       );
 
       // Decrement stock in SQLite
@@ -273,23 +305,26 @@ async function syncData() {
     const unsyncedSales = await db.all('SELECT * FROM sales WHERE synced = 0');
     
     if (unsyncedSales.length > 0) {
-      // Gather full transaction detail (sales + items)
+      // Gather full transaction detail (sales + items) - Decrypting payloads for cloud Central
       const salesPayload = [];
       for (const sale of unsyncedSales) {
         const items = await db.all('SELECT * FROM sale_items WHERE sale_id = ?', [sale.id]);
         salesPayload.push({
-          ...sale,
+          id: sale.id,
+          total_amount: decrypt(sale.total_amount),
+          payment_method: decrypt(sale.payment_method),
+          created_at: sale.created_at,
           items: items.map(i => ({
             productId: i.product_id,
-            quantity: i.quantity,
-            unitPrice: i.unit_price
+            quantity: decrypt(i.quantity),
+            unitPrice: decrypt(i.unit_price)
           }))
         });
       }
 
       addSyncLog(`Attempting to sync ${unsyncedSales.length} transaction(s)...`, 'info');
 
-      // Send to central cloud API
+      // Send decrypted JSON payload to central cloud API
       const syncResponse = await fetch(`${CLOUD_SERVER_URL}/api/sync/sales`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -299,8 +334,6 @@ async function syncData() {
       if (!syncResponse.ok) {
         throw new Error(`Cloud server returned ${syncResponse.status}`);
       }
-
-      const syncResult = await syncResponse.json();
 
       // Mark local sales as synced
       const now = new Date().toISOString();
@@ -313,41 +346,52 @@ async function syncData() {
       addSyncLog(`Successfully synchronized ${unsyncedSales.length} transaction(s) to cloud!`, 'success');
     }
 
-    // 2. Sync Catalog (Cloud PG -> Local SQLite)
-    const catalogResponse = await fetch(`${CLOUD_SERVER_URL}/api/sync/catalog`);
+    // 2. Sync Catalog (Cloud PG -> Local SQLite) - Incremental Timestamp Replication
+    const lastUpdatedRow = await db.get('SELECT MAX(updated_at) as last_updated FROM products');
+    const since = lastUpdatedRow ? lastUpdatedRow.last_updated : null;
+    const catalogUrl = `${CLOUD_SERVER_URL}/api/sync/catalog` + (since ? `?since=${encodeURIComponent(since)}` : '');
+
+    const catalogResponse = await fetch(catalogUrl);
     if (catalogResponse.ok) {
       const cloudProducts = await catalogResponse.json();
       
-      for (const cp of cloudProducts) {
-        // Calculate adjusted stock to avoid overwriting pending local sales stock level
-        const pendingQtyRow = await db.get(
-          `SELECT SUM(si.quantity) as qty 
-           FROM sale_items si 
-           JOIN sales s ON s.id = si.sale_id 
-           WHERE si.product_id = ? AND s.synced = 0`,
-          [cp.id]
-        );
-        const pendingQty = pendingQtyRow.qty || 0;
-        const adjustedStock = cp.stock_quantity - pendingQty;
+      if (cloudProducts.length > 0) {
+        addSyncLog(`Received catalog updates for ${cloudProducts.length} product(s).`, 'info');
+        
+        for (const cp of cloudProducts) {
+          // Decrypt pending quantities in-memory to calculate adjusted local stock levels accurately
+          const pendingQtyRows = await db.all(
+            `SELECT si.quantity 
+             FROM sale_items si 
+             JOIN sales s ON s.id = si.sale_id 
+             WHERE si.product_id = ? AND s.synced = 0`,
+            [cp.id]
+          );
+          
+          let pendingQty = 0;
+          for (const pr of pendingQtyRows) {
+            pendingQty += decrypt(pr.quantity);
+          }
+          const adjustedStock = cp.stock_quantity - pendingQty;
 
-        // Upsert product locally
-        const existing = await db.get('SELECT id FROM products WHERE id = ?', [cp.id]);
-        if (existing) {
-          await db.run(
-            `UPDATE products 
-             SET name = ?, sku = ?, price = ?, stock_quantity = ?, updated_at = ? 
-             WHERE id = ?`,
-            [cp.name, cp.sku, cp.price, adjustedStock, cp.updated_at, cp.id]
-          );
-        } else {
-          await db.run(
-            `INSERT INTO products (id, name, sku, price, stock_quantity, updated_at) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [cp.id, cp.name, cp.sku, cp.price, adjustedStock, cp.updated_at]
-          );
+          // Upsert product locally
+          const existing = await db.get('SELECT id FROM products WHERE id = ?', [cp.id]);
+          if (existing) {
+            await db.run(
+              `UPDATE products 
+               SET name = ?, sku = ?, price = ?, stock_quantity = ?, updated_at = ? 
+               WHERE id = ?`,
+              [cp.name, cp.sku, cp.price, adjustedStock, cp.updated_at, cp.id]
+            );
+          } else {
+            await db.run(
+              `INSERT INTO products (id, name, sku, price, stock_quantity, updated_at) 
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [cp.id, cp.name, cp.sku, cp.price, adjustedStock, cp.updated_at]
+            );
+          }
         }
       }
-      // Keep local products that are not present in cloud (if any, but cloud is source of truth)
     }
 
     return true;

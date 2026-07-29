@@ -504,3 +504,68 @@ input:focus {
   0% { transform: scale(0.9); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+/* WebSocket Insert Row Flash Glow */
+@keyframes rowGlowFade {
+  0% { 
+    background-color: rgba(99, 102, 241, 0.35); 
+    box-shadow: inset 0 0 15px rgba(99, 102, 241, 0.2);
+  }
+  100% { 
+    background-color: transparent; 
+    box-shadow: inset 0 0 0 transparent;
+  }
+}
+
+.glow-new-row {
+  animation: rowGlowFade 2.5s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+/* AI Safety Badges */
+.safety-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.safety-badge.healthy {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.safety-badge.reorder {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-primary-light);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.safety-badge.safety-alert {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-warning);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.safety-badge.out-of-stock {
+  background: rgba(239, 68, 110, 0.12);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 110, 0.2);
+}
+
+/* Clickable table rows */
+#catalog-table-body tr {
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+#catalog-table-body tr:hover {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+#catalog-table-body tr td:last-child {
+  cursor: default; /* Actions column shouldn't look row-clickable */
+}
