@@ -177,6 +177,17 @@ app.post('/api/shifts/close', async (req, res) => {
   }
 });
 
+// Get local exchange rates
+app.get('/api/exchange-rates', async (req, res) => {
+  try {
+    const db = await getDb();
+    const rates = await db.all('SELECT * FROM exchange_rates');
+    res.json(rates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get local catalog
 app.get('/api/products', async (req, res) => {
   try {
@@ -349,7 +360,25 @@ async function syncData() {
       await purgeOldSyncedData(db);
     }
 
-    // 2. Sync Catalog (Cloud PG -> Local SQLite) - Incremental Timestamp Replication
+    // 2. Sync Exchange Rates (Cloud -> Local SQLite)
+    try {
+      const rateResponse = await fetch(`${CLOUD_SERVER_URL}/api/sync/exchange-rates`);
+      if (rateResponse.ok) {
+        const rates = await rateResponse.json();
+        for (const r of rates) {
+          await db.run(
+            `INSERT INTO exchange_rates (currency, rate, updated_at) 
+             VALUES (?, ?, ?) 
+             ON CONFLICT(currency) DO UPDATE SET rate = ?, updated_at = ?`,
+            [r.currency, r.rate, r.updated_at, r.rate, r.updated_at]
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("Could not sync exchange rates from cloud. Using local cache:", e.message);
+    }
+
+    // 3. Sync Catalog (Cloud PG -> Local SQLite) - Incremental Timestamp Replication
     const lastUpdatedRow = await db.get('SELECT MAX(updated_at) as last_updated FROM products');
     const since = lastUpdatedRow ? lastUpdatedRow.last_updated : null;
     const catalogUrl = `${CLOUD_SERVER_URL}/api/sync/catalog` + (since ? `?since=${encodeURIComponent(since)}` : '');

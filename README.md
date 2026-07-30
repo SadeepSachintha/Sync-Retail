@@ -91,7 +91,8 @@ graph TD
 │   ├── test-scanner.js      # Timing-based barcode emulation validator
 │   ├── test-incremental.js  # Catalog delta replication validator
 │   ├── test-encryption.js   # Raw database encryption-at-rest auditor
-│   └── test-compaction.js   # SQLite storage auto-purge & vacuum compiler
+│   ├── test-compaction.js   # SQLite storage auto-purge & vacuum compiler
+│   └── test-currency.js     # Multi-currency conversion & exchange calculator validator
 │
 ├── docker-compose.yml       # Orchestrates local client, cloud server, and DB
 └── package.json             # Workspace-level helper scripts
@@ -160,4 +161,10 @@ Validates that synced transactions older than the threshold are automatically de
 ```bash
 cd local-pos
 $env:NODE_PATH="node_modules"; node ../scripts/test-compaction.js
+```
+
+### 6. Multi-Currency Offline Cashier Assistant
+Validates currency exchange preloads in SQLite and verifies conversion calculations:
+```bash
+node scripts/test-currency.js
 ```

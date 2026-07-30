@@ -70,7 +70,24 @@ export async function getDb() {
       FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
       FOREIGN KEY (product_id) REFERENCES products(id)
     );
+
+    CREATE TABLE IF NOT EXISTS exchange_rates (
+      currency TEXT PRIMARY KEY,
+      rate REAL NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
+
+  // Seed default exchange rates (relative to native LKR)
+  try {
+    const now = new Date().toISOString();
+    await dbConnection.run("INSERT OR IGNORE INTO exchange_rates (currency, rate, updated_at) VALUES ('LKR', 1.0, ?)", [now]);
+    await dbConnection.run("INSERT OR IGNORE INTO exchange_rates (currency, rate, updated_at) VALUES ('USD', 300.0, ?)", [now]);
+    await dbConnection.run("INSERT OR IGNORE INTO exchange_rates (currency, rate, updated_at) VALUES ('EUR', 330.0, ?)", [now]);
+    await dbConnection.run("INSERT OR IGNORE INTO exchange_rates (currency, rate, updated_at) VALUES ('GBP', 390.0, ?)", [now]);
+  } catch (e) {
+    console.error("Error seeding default exchange rates:", e);
+  }
 
   // Migrate sales column if DB was already created in previous runs
   try {

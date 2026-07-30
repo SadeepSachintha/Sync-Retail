@@ -223,6 +223,16 @@
           </div>
         </div>
 
+        <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 10px; margin-bottom: 10px;">
+          <span class="text-muted" style="font-size: 11px; font-weight: 600; text-transform: uppercase;">Display Currency</span>
+          <select id="checkout-currency-select" style="background: rgba(0,0,0,0.25); color: white; border: 1px solid var(--border-light); border-radius: 4px; padding: 4px 8px; font-size: 12px; outline: none; font-family: monospace;">
+            <option value="LKR">LKR (Rs.)</option>
+            <option value="USD">USD ($)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
+          </select>
+        </div>
+
         <div class="summary-line">
           <span>Subtotal</span>
           <span id="subtotal-display">Rs. 0.00</span>
@@ -239,6 +249,10 @@
         <div class="summary-line total-line">
           <span>Total</span>
           <span id="total-display">Rs. 0.00</span>
+        </div>
+        <div id="foreign-total-row" style="display: none; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 13px; color: var(--color-primary-light); font-weight: 600;">
+          <span>Foreign Equiv:</span>
+          <strong id="foreign-total-display">0.00</strong>
         </div>
 
         <div class="payment-methods">
@@ -259,6 +273,23 @@
               <i data-lucide="smartphone"></i>
               <span>Mobile</span>
             </label>
+          </div>
+        </div>
+
+        <!-- Exchange Cashier Calculator -->
+        <div id="multi-currency-calc" style="display: none; flex-direction: column; gap: 8px; margin-top: 15px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 15px;">
+          <h4 style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Exchange Calculator</h4>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 12px; color: var(--text-muted);" id="foreign-paid-label">Paid (USD):</span>
+            <input type="number" id="foreign-paid-input" placeholder="0.00" min="0" step="any" style="width: 100px; padding: 4px 8px; font-size: 13px; text-align: right; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-light); border-radius: 4px; outline: none; font-family: monospace;">
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 6px;">
+            <span class="text-muted">Equivalent Paid in LKR:</span>
+            <strong id="lkr-equivalent-paid">Rs. 0.00</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; color: var(--color-warning);">
+            <span>Change Due (LKR):</span>
+            <strong id="lkr-change-due">Rs. 0.00</strong>
           </div>
         </div>
 
@@ -381,6 +412,10 @@
         <div class="receipt-total-row">
           <span>Total Paid:</span>
           <span id="receipt-total" class="bold total-amount">Rs. 0.00</span>
+        </div>
+        <div class="receipt-info-row" id="receipt-foreign-details" style="display:none; font-size:12px; color: var(--text-muted); margin-top: 6px; flex-direction: column; align-items: flex-end; gap: 2px;">
+          <span id="receipt-foreign-calc">Paid: $0.00 (Rate: 300)</span>
+          <span id="receipt-foreign-change">Change Returned: Rs. 0.00</span>
         </div>
       </div>
       <div class="receipt-footer">

@@ -16,6 +16,22 @@ let filteredSuggestions = [];
 let vatRate = 0.10;
 let oscillatorType = 'sine';
 
+// Multi-Currency rates state
+let exchangeRates = { LKR: 1.0, USD: 300.0, EUR: 330.0, GBP: 390.0 };
+async function fetchExchangeRates() {
+  try {
+    const res = await fetch('/api/exchange-rates');
+    if (res.ok) {
+      const data = await res.json();
+      for (const r of data) {
+        exchangeRates[r.currency] = r.rate;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load exchange rates:", err);
+  }
+}
+
 // DOM elements
 const productsGrid = document.getElementById('products-grid');
 const cartItemsContainer = document.getElementById('cart-items-container');
@@ -35,6 +51,19 @@ const searchInput = document.getElementById('search-input');
 const searchSuggestions = document.getElementById('search-suggestions');
 const receiptModal = document.getElementById('receipt-modal');
 const closeReceiptBtn = document.getElementById('close-receipt-btn');
+
+// Multi-Currency Assistant DOM selectors
+const checkoutCurrencySelect = document.getElementById('checkout-currency-select');
+const foreignTotalRow = document.getElementById('foreign-total-row');
+const foreignTotalDisplay = document.getElementById('foreign-total-display');
+const multiCurrencyCalc = document.getElementById('multi-currency-calc');
+const foreignPaidLabel = document.getElementById('foreign-paid-label');
+const foreignPaidInput = document.getElementById('foreign-paid-input');
+const lkrEquivalentPaid = document.getElementById('lkr-equivalent-paid');
+const lkrChangeDue = document.getElementById('lkr-change-due');
+const receiptForeignDetails = document.getElementById('receipt-foreign-details');
+const receiptForeignCalc = document.getElementById('receipt-foreign-calc');
+const receiptForeignChange = document.getElementById('receipt-foreign-change');
 
 // Advanced POS DOM elements
 const navPosBtn = document.getElementById('nav-pos-btn');
@@ -603,7 +632,49 @@ function renderCart() {
 
   taxDisplay.innerText = formatLKR(tax);
   totalDisplay.innerText = formatLKR(total);
-  
+
+  // Multi-Currency conversions
+  const selectedCurrency = checkoutCurrencySelect.value;
+  const rate = exchangeRates[selectedCurrency] || 1.0;
+  const convertedTotal = total / rate;
+
+  if (selectedCurrency === 'LKR') {
+    foreignTotalRow.style.display = 'none';
+    multiCurrencyCalc.style.display = 'none';
+  } else {
+    foreignTotalRow.style.display = 'flex';
+    let symbol = '$';
+    if (selectedCurrency === 'EUR') symbol = '€';
+    if (selectedCurrency === 'GBP') symbol = '£';
+    foreignTotalDisplay.innerText = `${symbol}${convertedTotal.toFixed(2)}`;
+
+    // Show cashier calculator if payment method is set to Cash
+    const paymentMethodEl = document.querySelector('input[name="payment-method"]:checked');
+    const paymentMethod = paymentMethodEl ? paymentMethodEl.value : 'Cash';
+    if (paymentMethod === 'Cash') {
+      multiCurrencyCalc.style.display = 'flex';
+      foreignPaidLabel.innerText = `Paid (${selectedCurrency}):`;
+      
+      const foreignPaid = parseFloat(foreignPaidInput.value || 0);
+      const lkrPaid = foreignPaid * rate;
+      const lkrChange = lkrPaid - total;
+
+      lkrEquivalentPaid.innerText = formatLKR(lkrPaid);
+
+      if (lkrPaid >= total) {
+        lkrChangeDue.innerText = formatLKR(lkrChange);
+        lkrChangeDue.style.color = 'var(--color-success)';
+        checkoutBtn.disabled = false;
+      } else {
+        lkrChangeDue.innerText = `Short by ${formatLKR(total - lkrPaid)}`;
+        lkrChangeDue.style.color = 'var(--color-danger)';
+        checkoutBtn.disabled = true;
+      }
+    } else {
+      multiCurrencyCalc.style.display = 'none';
+    }
+  }
+
   initIcons();
 }
 
@@ -1026,13 +1097,20 @@ checkoutBtn.addEventListener('click', async () => {
     }
 
     const sale = await res.json();
-    playPOSSound('success');
-    showReceipt(sale, discountAmount);
+    
+    const currency = checkoutCurrencySelect.value;
+    const rate = exchangeRates[currency] || 1.0;
+    const foreignPaid = parseFloat(foreignPaidInput.value || 0);
 
-    // Reset Cart & Discounts
+    playPOSSound('success');
+    showReceipt(sale, discountAmount, currency, rate, foreignPaid);
+
+    // Reset Cart & Discounts & Currencies
     cart = [];
     discountValue = 0;
     discountInput.value = '';
+    checkoutCurrencySelect.value = 'LKR';
+    foreignPaidInput.value = '';
     renderCart();
     await fetchProducts(); 
     await fetchSyncStatus(); 
@@ -1046,11 +1124,31 @@ checkoutBtn.addEventListener('click', async () => {
 });
 
 // Show receipt popup modal
-function showReceipt(sale, discountAmount = 0) {
+function showReceipt(sale, discountAmount = 0, currency = 'LKR', rate = 1.0, foreignPaid = 0) {
   document.getElementById('receipt-id').innerText = `#${sale.id.slice(0, 8)}`;
   document.getElementById('receipt-time').innerText = new Date(sale.createdAt).toLocaleString();
   document.getElementById('receipt-payment').innerText = sale.paymentMethod;
   document.getElementById('receipt-total').innerText = formatLKR(sale.totalAmount);
+
+  // Multi-Currency details inside receipt
+  const receiptForeignRow = document.getElementById('receipt-foreign-details');
+  const receiptForeignCalc = document.getElementById('receipt-foreign-calc');
+  const receiptForeignChange = document.getElementById('receipt-foreign-change');
+
+  if (currency !== 'LKR' && sale.paymentMethod === 'Cash') {
+    let symbol = '$';
+    if (currency === 'EUR') symbol = '€';
+    if (currency === 'GBP') symbol = '£';
+    
+    const lkrPaid = foreignPaid * rate;
+    const change = lkrPaid - sale.totalAmount;
+
+    receiptForeignCalc.innerText = `Paid: ${symbol}${foreignPaid.toFixed(2)} (Rate: 1 ${currency} = ${rate.toFixed(2)} LKR)`;
+    receiptForeignChange.innerText = `Change: ${formatLKR(change)}`;
+    receiptForeignRow.style.display = 'flex';
+  } else {
+    receiptForeignRow.style.display = 'none';
+  }
 
   const discountRow = document.getElementById('receipt-discount-row');
   const discountDivider = document.getElementById('receipt-discount-divider');
@@ -1105,7 +1203,23 @@ document.querySelectorAll('.payment-option').forEach(option => {
   option.addEventListener('click', () => {
     document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('active'));
     option.classList.add('active');
+    
+    const radio = option.querySelector('input[type="radio"]');
+    if (radio) {
+      radio.checked = true;
+    }
+    renderCart(); // Refresh cart to show/hide the cash calculator instantly!
   });
+});
+
+// Exchange Rate selection and input change listeners
+checkoutCurrencySelect.addEventListener('change', () => {
+  foreignPaidInput.value = '';
+  renderCart();
+});
+
+foreignPaidInput.addEventListener('input', () => {
+  renderCart();
 });
 
 // Toast Notifications helper
@@ -1237,6 +1351,7 @@ window.simulateScanner = function(sku) {
 
 // Startup
 async function init() {
+  await fetchExchangeRates();
   await fetchActiveShift();
   await fetchProducts();
   await fetchSyncStatus();
@@ -1288,3 +1403,6 @@ configChannel.onmessage = async (e) => {
     showToast('System configuration updated via cross-tab broadcast.', 'info');
   }
 };
+
+// Alias for BroadcastChannel settings compatibility
+const updateCartDisplay = renderCart;

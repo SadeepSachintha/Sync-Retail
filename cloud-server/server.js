@@ -26,6 +26,16 @@ function broadcast(data) {
 // SYNCHRONIZATION API
 // ----------------------------------------------------
 
+// Endpoint for POS to download the latest exchange rates
+app.get('/api/sync/exchange-rates', (req, res) => {
+  res.json([
+    { currency: 'LKR', rate: 1.0, updated_at: new Date().toISOString() },
+    { currency: 'USD', rate: 300.0, updated_at: new Date().toISOString() },
+    { currency: 'EUR', rate: 330.0, updated_at: new Date().toISOString() },
+    { currency: 'GBP', rate: 390.0, updated_at: new Date().toISOString() }
+  ]);
+});
+
 // Endpoint for POS to download the latest product catalog (supports incremental replication via 'since' parameter)
 app.get('/api/sync/catalog', async (req, res) => {
   const { since } = req.query;
