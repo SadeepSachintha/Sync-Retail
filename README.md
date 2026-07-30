@@ -90,7 +90,8 @@ graph TD
 │   ├── test-sync.js         # E2E sync and shift gate verification test
 │   ├── test-scanner.js      # Timing-based barcode emulation validator
 │   ├── test-incremental.js  # Catalog delta replication validator
-│   └── test-encryption.js   # Raw database encryption-at-rest auditor
+│   ├── test-encryption.js   # Raw database encryption-at-rest auditor
+│   └── test-compaction.js   # SQLite storage auto-purge & vacuum compiler
 │
 ├── docker-compose.yml       # Orchestrates local client, cloud server, and DB
 └── package.json             # Workspace-level helper scripts
@@ -152,4 +153,11 @@ Directly audits raw SQLite binary files to assert transaction records are stored
 ```bash
 cd local-pos
 $env:NODE_PATH="node_modules"; node ../scripts/test-encryption.js
+```
+
+### 5. SQLite Storage Auto-Purge & Compaction
+Validates that synced transactions older than the threshold are automatically deleted and space reclaimed on disk:
+```bash
+cd local-pos
+$env:NODE_PATH="node_modules"; node ../scripts/test-compaction.js
 ```

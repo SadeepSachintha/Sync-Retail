@@ -153,6 +153,8 @@ app.post('/api/shifts/close', async (req, res) => {
     );
 
     addSyncLog(`Register Shift Closed. Discrepancy: Rs. ${discrepancy.toFixed(2)}`, discrepancy === 0 ? 'success' : 'warning');
+    
+    await purgeOldSyncedData(db);
 
     res.json({
       status: 'success',
@@ -344,6 +346,7 @@ async function syncData() {
         );
       }
       addSyncLog(`Successfully synchronized ${unsyncedSales.length} transaction(s) to cloud!`, 'success');
+      await purgeOldSyncedData(db);
     }
 
     // 2. Sync Catalog (Cloud PG -> Local SQLite) - Incremental Timestamp Replication
@@ -398,6 +401,47 @@ async function syncData() {
   } catch (error) {
     addSyncLog(`Sync Failed: ${error.message}`, 'error');
     return false;
+  }
+}
+
+// Purges synced historical sales and reclaims storage space on disk via SQLite vacuum
+async function purgeOldSyncedData(db) {
+  try {
+    const thresholdDays = parseInt(process.env.PURGE_THRESHOLD_DAYS !== undefined ? process.env.PURGE_THRESHOLD_DAYS : '30');
+    const cutOffDate = new Date(Date.now() - thresholdDays * 24 * 60 * 60 * 1000).toISOString();
+
+    addSyncLog(`Auditing database for cleanup. Purging synced records older than ${thresholdDays} days...`, 'info');
+
+    // 1. Retrieve IDs of synced sales older than the cutoff
+    const oldSyncedSales = await db.all(
+      'SELECT id FROM sales WHERE synced = 1 AND created_at < ?',
+      [cutOffDate]
+    );
+
+    if (oldSyncedSales.length > 0) {
+      const ids = oldSyncedSales.map(s => s.id);
+      
+      // Perform scoped delete transaction
+      await db.run('BEGIN TRANSACTION;');
+      for (const id of ids) {
+        await db.run('DELETE FROM sale_items WHERE sale_id = ?', [id]);
+        await db.run('DELETE FROM sales WHERE id = ?', [id]);
+      }
+      await db.run('COMMIT;');
+
+      addSyncLog(`Purged ${oldSyncedSales.length} historical synced sales and their line items.`, 'success');
+    } else {
+      addSyncLog('No historical synced sales matched the cleanup cutoff.', 'info');
+    }
+
+    // 2. Reclaim database file size on disk
+    addSyncLog('Executing SQLite vacuum database compaction...', 'info');
+    await db.run('VACUUM;');
+    addSyncLog('Database compaction complete.', 'success');
+
+  } catch (error) {
+    console.error('[Database Purge Error]:', error);
+    addSyncLog(`Database cleanup failed: ${error.message}`, 'error');
   }
 }
 
