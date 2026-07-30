@@ -93,7 +93,8 @@ graph TD
 │   ├── test-encryption.js   # Raw database encryption-at-rest auditor
 │   ├── test-compaction.js   # SQLite storage auto-purge & vacuum compiler
 │   ├── test-currency.js     # Multi-currency conversion & exchange calculator validator
-│   └── test-watchdog.js     # Database corruption diagnostics and self-healing validator
+│   ├── test-watchdog.js     # Database corruption diagnostics and self-healing validator
+│   └── test-synth.js        # Sound synthesizer DOM configuration auditor
 │
 ├── docker-compose.yml       # Orchestrates local client, cloud server, and DB
 └── package.json             # Workspace-level helper scripts
@@ -182,3 +183,9 @@ Simulates database corruption by injecting garbage bytes, restarts the server, a
    ```bash
    node scripts/test-watchdog.js
    ```
+
+### 8. Sound Synthesizer DOM Configurations
+Validates the presence of synth pitch, volume, duration controls, and test triggers inside the HTML client:
+```bash
+node scripts/test-synth.js
+```

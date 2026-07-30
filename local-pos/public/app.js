@@ -15,6 +15,9 @@ let activeSuggestionIndex = -1;
 let filteredSuggestions = [];
 let vatRate = 0.10;
 let oscillatorType = 'sine';
+let synthPitch = 800;
+let synthVolume = 0.30;
+let synthDuration = 150;
 
 // Multi-Currency rates state
 let exchangeRates = { LKR: 1.0, USD: 300.0, EUR: 330.0, GBP: 390.0 };
@@ -75,6 +78,13 @@ const shiftPanelView = document.getElementById('shift-panel-view');
 const settingsPanelView = document.getElementById('settings-panel-view');
 const vatRateSelect = document.getElementById('vat-rate-select');
 const soundOscSelect = document.getElementById('sound-osc-select');
+const synthPitchInput = document.getElementById('synth-pitch');
+const synthPitchVal = document.getElementById('synth-pitch-val');
+const synthVolumeInput = document.getElementById('synth-volume');
+const synthVolumeVal = document.getElementById('synth-volume-val');
+const synthDurationInput = document.getElementById('synth-duration');
+const synthDurationVal = document.getElementById('synth-duration-val');
+const synthTestBtn = document.getElementById('synth-test-btn');
 
 // Broadcast Channel API for cross-tab synchronization
 const configChannel = new BroadcastChannel('pos_config_channel');
@@ -130,26 +140,26 @@ function playPOSSound(type) {
 
     if (type === 'success') {
       osc.type = oscillatorType;
-      osc.frequency.setValueAtTime(1450, ctx.currentTime);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+      osc.frequency.setValueAtTime(synthPitch, ctx.currentTime);
+      gain.gain.setValueAtTime(synthVolume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + (synthDuration / 1000));
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.08);
+      osc.stop(ctx.currentTime + (synthDuration / 1000));
     } else if (type === 'error') {
       osc.type = oscillatorType;
-      osc.frequency.setValueAtTime(120, ctx.currentTime);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+      osc.frequency.setValueAtTime(synthPitch / 5, ctx.currentTime);
+      gain.gain.setValueAtTime(synthVolume, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + (synthDuration * 2 / 1000));
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.25);
+      osc.stop(ctx.currentTime + (synthDuration * 2 / 1000));
     } else if (type === 'trash') {
       osc.type = oscillatorType;
-      osc.frequency.setValueAtTime(250, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.3);
-      gain.gain.setValueAtTime(0.20, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.frequency.setValueAtTime(synthPitch, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(synthPitch / 4, ctx.currentTime + (synthDuration * 2.5 / 1000));
+      gain.gain.setValueAtTime(synthVolume, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + (synthDuration * 2.5 / 1000));
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.3);
+      osc.stop(ctx.currentTime + (synthDuration * 2.5 / 1000));
     }
   } catch (err) {
     console.warn("Audio feedback block:", err);
@@ -1369,7 +1379,10 @@ vatRateSelect.addEventListener('change', (e) => {
   configChannel.postMessage({
     type: 'setting_change',
     vatRate,
-    oscillatorType
+    oscillatorType,
+    synthPitch,
+    synthVolume,
+    synthDuration
   });
 });
 
@@ -1379,8 +1392,55 @@ soundOscSelect.addEventListener('change', (e) => {
   configChannel.postMessage({
     type: 'setting_change',
     vatRate,
-    oscillatorType
+    oscillatorType,
+    synthPitch,
+    synthVolume,
+    synthDuration
   });
+});
+
+// Sound customizer sliders event listeners
+synthPitchInput.addEventListener('input', (e) => {
+  synthPitch = parseInt(e.target.value);
+  synthPitchVal.innerText = `${synthPitch} Hz`;
+  configChannel.postMessage({
+    type: 'setting_change',
+    vatRate,
+    oscillatorType,
+    synthPitch,
+    synthVolume,
+    synthDuration
+  });
+});
+
+synthVolumeInput.addEventListener('input', (e) => {
+  synthVolume = parseFloat(e.target.value);
+  synthVolumeVal.innerText = synthVolume.toFixed(2);
+  configChannel.postMessage({
+    type: 'setting_change',
+    vatRate,
+    oscillatorType,
+    synthPitch,
+    synthVolume,
+    synthDuration
+  });
+});
+
+synthDurationInput.addEventListener('input', (e) => {
+  synthDuration = parseInt(e.target.value);
+  synthDurationVal.innerText = `${synthDuration} ms`;
+  configChannel.postMessage({
+    type: 'setting_change',
+    vatRate,
+    oscillatorType,
+    synthPitch,
+    synthVolume,
+    synthDuration
+  });
+});
+
+synthTestBtn.addEventListener('click', () => {
+  playPOSSound('success');
 });
 
 configChannel.onmessage = async (e) => {
@@ -1394,10 +1454,19 @@ configChannel.onmessage = async (e) => {
   } else if (e.data.type === 'setting_change') {
     vatRate = e.data.vatRate;
     oscillatorType = e.data.oscillatorType;
+    synthPitch = e.data.synthPitch || synthPitch;
+    synthVolume = e.data.synthVolume !== undefined ? e.data.synthVolume : synthVolume;
+    synthDuration = e.data.synthDuration || synthDuration;
     
-    // Sync settings forms dropdown elements
+    // Sync settings forms elements
     vatRateSelect.value = vatRate.toFixed(2);
     soundOscSelect.value = oscillatorType;
+    synthPitchInput.value = synthPitch;
+    synthPitchVal.innerText = `${synthPitch} Hz`;
+    synthVolumeInput.value = synthVolume;
+    synthVolumeVal.innerText = synthVolume.toFixed(2);
+    synthDurationInput.value = synthDuration;
+    synthDurationVal.innerText = `${synthDuration} ms`;
     
     updateCartDisplay();
     showToast('System configuration updated via cross-tab broadcast.', 'info');

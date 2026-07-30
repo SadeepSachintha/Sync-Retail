@@ -180,13 +180,37 @@
           <div style="display: flex; flex-direction: column; gap: 14px;">
             <div>
               <label for="sound-osc-select" style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 8px;">WAVEFORM SHAPE</label>
-              <select id="sound-osc-select" style="width: 100%; background: #1a1b24; color: white; border: 1px solid var(--border-light); border-radius: 6px; padding: 8px; outline: none; font-size: 13px;">
+              <select id="sound-osc-select" style="width: 100%; background: #1a1b24; color: white; border: 1px solid var(--border-light); border-radius: 6px; padding: 8px; outline: none; font-size: 13px; margin-bottom: 12px;">
                 <option value="sine" selected>Sine wave (Sleek)</option>
                 <option value="triangle">Triangle wave (Mellow)</option>
                 <option value="sawtooth">Sawtooth wave (Retro)</option>
                 <option value="square">Square wave (Arcade)</option>
               </select>
             </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <label for="synth-pitch" style="font-size: 12px; color: var(--text-muted);">BEEP PITCH (HZ)</label>
+                <span id="synth-pitch-val" style="font-size: 12px; color: var(--color-primary-light); font-weight: bold; font-family: monospace;">800 Hz</span>
+              </div>
+              <input type="range" id="synth-pitch" min="400" max="2000" step="50" value="800" style="width: 100%; accent-color: var(--color-primary-light); margin-bottom: 12px;">
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <label for="synth-volume" style="font-size: 12px; color: var(--text-muted);">BEEP VOLUME</label>
+                <span id="synth-volume-val" style="font-size: 12px; color: var(--color-primary-light); font-weight: bold; font-family: monospace;">0.3</span>
+              </div>
+              <input type="range" id="synth-volume" min="0.05" max="1.0" step="0.05" value="0.30" style="width: 100%; accent-color: var(--color-primary-light); margin-bottom: 12px;">
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <label for="synth-duration" style="font-size: 12px; color: var(--text-muted);">BEEP DURATION (MS)</label>
+                <span id="synth-duration-val" style="font-size: 12px; color: var(--color-primary-light); font-weight: bold; font-family: monospace;">150 ms</span>
+              </div>
+              <input type="range" id="synth-duration" min="50" max="500" step="25" value="150" style="width: 100%; accent-color: var(--color-primary-light); margin-bottom: 12px;">
+            </div>
+            <button id="synth-test-btn" class="btn btn-secondary" style="margin-top: 5px; display: flex; align-items: center; gap: 6px; width: fit-content; padding: 6px 12px;">
+              <i data-lucide="volume-2" style="width: 16px; height: 16px;"></i> Test Sound Cue
+            </button>
             <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
               * Select the physical hardware sound synthesizer waveform style for confirmation audio cues.
             </p>
