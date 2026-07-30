@@ -95,6 +95,7 @@ To safeguard transactional API endpoints in public cloud deployments, implement 
   `X-Register-API-Key`. Requests missing or matching invalid keys are denied with `401 Unauthorized`.
 - **Transaction Idempotency**: All sales uploaded by registers must carry their local UUIDs. The cloud Postgres server executes duplicate checks before starting transactions to ensure network retries do not result in duplicate ledger entries.
 - **Local SQLite Encryption at Rest**: Encrypt all financial totals, payment methods, transaction item quantities, unit prices, and active shift floats inside the register SQLite database at rest using AES-256-CBC ciphers. Stolen or physically compromised register hardware will not leak store revenue margins or cash drawer float balances.
+- **Database integrity Health Watchdog**: Edge registers automatically audit their local databases on start using `PRAGMA integrity_check`. If corruption is detected, the broken database is isolated to `local_pos.sqlite.corrupted-[timestamp]` to prevent server boot failure. The system recovers by initializing a fresh database and pulling catalog values from the central cloud server.
 
 ---
 
@@ -105,6 +106,7 @@ To safeguard transactional API endpoints in public cloud deployments, implement 
 - **Catalog Synchronization (Incremental Delta Replication)**: The local register client queries the cloud catalog `/api/sync/catalog` passing `?since=MAX_TIMESTAMP`. Pulls and updates only changed products to reduce network overhead. To avoid overriding local stock deductions of offline sales that haven't synced yet, the local POS client computes:
   `local_stock = cloud_stock - (sum of product quantities in unsynced local sales)`
   before saving catalog stock counts back to SQLite (decrypting quantities in memory dynamically to run inventory checks).
+- **Multi-Currency Transactions**: While edge registers calculate and display subtotals in foreign currencies (USD, EUR, GBP) using synchronized exchange rate sheets, transactions are synchronized with the cloud using the base LKR currency amounts. Exchange rates are fetched from the cloud server (`GET /api/sync/exchange-rates`) on a background schedule.
 
 ---
 
@@ -112,6 +114,7 @@ To safeguard transactional API endpoints in public cloud deployments, implement 
 
 ### A. Local POS registers (Offline Database)
 - **Local SQLite File Backup**: Set up a daily cron script on the register machine to make copy snapshots of `/app/data/local_pos.sqlite` to an external backup storage device (e.g., SD card or secondary hard drive).
+- **SQLite Storage Auto-Purge & Compaction**: To prevent edge registers from exhausting storage space, the application automatically purges synced transaction sales older than `PURGE_THRESHOLD_DAYS` (default 30) from SQLite and runs `VACUUM` disk compaction after sync cycles and shift closures.
 - **Rebuilding Terminal**: If terminal hardware fails:
   1. Replace the PC.
   2. Install Node and clone the POS register code.

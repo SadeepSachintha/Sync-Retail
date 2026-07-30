@@ -44,6 +44,14 @@ This project is enhanced with enterprise-grade register drawers, printer formatt
     - Encrypts sales figures, payment methods, cart items, and shift float variables at rest in SQLite using randomly generated Initialization Vectors (IV).
 13. **Cross-Tab Settings Broadcast (HTML5 BroadcastChannel)**:
     - Automatically synchronizes adjustments made in setting tabs (VAT tax rate slider, synthesizer waveform selections), active register shifts, and network toggles across all open register browser tabs.
+14. **SQLite Database Auto-Purge & Compaction**:
+    - Periodically deletes historical synced transactions and associated line items, running `VACUUM` to physically release unused database disk pages on edge terminals.
+15. **Multi-Currency Offline Cashier Assistant**:
+    - Preloads exchange rate sheets, calculates foreign currency equivalents dynamically, embeds an active cash drawer exchange converter, and prints converted payment logs.
+16. **Database Integrity Health Watchdog**:
+    - Performs database health checks via `PRAGMA integrity_check` on boot. If corruption is found, it isolates the corrupt database and initializes a fresh database synced from the Cloud to prevent cashier downtime.
+17. **Sound Synthesizer Audio Customizer**:
+    - Provides sliders to configure synthesizer pitch, volume, and playback durations, broadcasting adjustments instantly to all active tabs.
 
 ---
 
@@ -97,7 +105,9 @@ graph TD
 │   └── test-synth.js        # Sound synthesizer DOM configuration auditor
 │
 ├── docker-compose.yml       # Orchestrates local client, cloud server, and DB
-└── package.json             # Workspace-level helper scripts
+├── package.json             # Workspace-level helper scripts
+├── production_handover_plan.md # Handover architecture and disaster recovery strategies
+└── saas_tenant_architecture.md # SaaS Multi-Tenant & Multi-Outlet Architecture Guide
 ```
 
 ---
