@@ -92,7 +92,8 @@ graph TD
 │   ├── test-incremental.js  # Catalog delta replication validator
 │   ├── test-encryption.js   # Raw database encryption-at-rest auditor
 │   ├── test-compaction.js   # SQLite storage auto-purge & vacuum compiler
-│   └── test-currency.js     # Multi-currency conversion & exchange calculator validator
+│   ├── test-currency.js     # Multi-currency conversion & exchange calculator validator
+│   └── test-watchdog.js     # Database corruption diagnostics and self-healing validator
 │
 ├── docker-compose.yml       # Orchestrates local client, cloud server, and DB
 └── package.json             # Workspace-level helper scripts
@@ -168,3 +169,16 @@ Validates currency exchange preloads in SQLite and verifies conversion calculati
 ```bash
 node scripts/test-currency.js
 ```
+
+### 7. Database Integrity Health Watchdog
+Simulates database corruption by injecting garbage bytes, restarts the server, and asserts that the corruption is isolated and recovered via delta syncs:
+1. Kill the active local-pos server process.
+2. Inject corruption:
+   ```bash
+   node -e "require('fs').writeFileSync('local-pos/data/local_pos.sqlite', 'CORRUPT_BYTES')"
+   ```
+3. Restart the local POS server (`npm run local-pos:start`).
+4. Run diagnostics:
+   ```bash
+   node scripts/test-watchdog.js
+   ```

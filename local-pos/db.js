@@ -11,12 +11,55 @@ const dbPath = process.env.NODE_ENV === 'test'
 
 let dbConnection = null;
 
+async function runIntegrityCheck(dbFilePath) {
+  if (dbFilePath === ':memory:') return true;
+  if (!fs.existsSync(dbFilePath)) return true;
+
+  let tempDb = null;
+  try {
+    tempDb = await open({
+      filename: dbFilePath,
+      driver: sqlite3.Database
+    });
+
+    const result = await tempDb.get('PRAGMA integrity_check;');
+    await tempDb.close();
+
+    if (result && result.integrity_check === 'ok') {
+      return true;
+    }
+    console.error(`[DATABASE WATCHDOG] Integrity check failed. Result: ${JSON.stringify(result)}`);
+    return false;
+  } catch (err) {
+    console.error(`[DATABASE WATCHDOG] Failed to run integrity check: ${err.message}`);
+    if (tempDb) {
+      try { await tempDb.close(); } catch (e) {}
+    }
+    return false;
+  }
+}
+
 export async function getDb() {
   if (dbConnection) return dbConnection;
 
   const dataDir = path.join(__dirname, 'data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  // Watchdog Health Check
+  if (dbPath !== ':memory:' && fs.existsSync(dbPath)) {
+    const isHealthy = await runIntegrityCheck(dbPath);
+    if (!isHealthy) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const corruptedPath = dbPath + `.corrupted-${timestamp}`;
+      console.warn(`[DATABASE WATCHDOG] Database corruption detected! Isolating corrupted database file to: ${corruptedPath}`);
+      try {
+        fs.renameSync(dbPath, corruptedPath);
+      } catch (renameErr) {
+        console.error(`[DATABASE WATCHDOG] Failed to isolate corrupted database: ${renameErr.message}`);
+      }
+    }
   }
 
   dbConnection = await open({
